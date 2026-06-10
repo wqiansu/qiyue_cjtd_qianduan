@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__chrome-devtools__list_pages",
+      "mcp__chrome-devtools__select_page",
+      "Bash(pnpm watch *)",
+      "mcp__chrome-devtools__take_snapshot",
+      "Bash(python -)",
+      "Bash(pnpm lint *)",
+      "Bash(./node_modules/.bin/eslint --version)",
+      "Bash(./node_modules/.bin/webpack --version)",
+      "Bash(./node_modules/.bin/eslint src/此间天地前端/index.ts)",
+      "Bash(node -)",
+      "Bash(./node_modules/.bin/eslint src/此间天地前端/index.ts --fix)",
+      "Bash(./node_modules/.bin/webpack --mode development)",
+      "Bash(./node_modules/.bin/webpack --mode production)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "mcp__chrome-devtools__evaluate_script",
+      "Bash(pnpm approve-builds *)",
+      "mcp__chrome-devtools__click",
+      "mcp__chrome-devtools__wait_for",
+      "Bash(taskkill //PID 29056 //F)",
+      "Bash(netstat -ano)",
+      "Bash(pnpm build *)"
+    ]
+  }
+}
