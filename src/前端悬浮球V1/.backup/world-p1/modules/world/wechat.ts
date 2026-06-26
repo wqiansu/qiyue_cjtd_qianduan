@@ -1,0 +1,1347 @@
+// 世界套件 P0-A · 微信（wechat）— 单 modal SPA 重构版（反馈批次 3b）
+// 修复与增强（对应反馈 1-12）：
+//   #1 输入框黑底 → CSS 防御性白底（status-bar.css，本文件只用 .th-wx-field 类）。
+//   #2 会话设置 API 预设 → 下拉选总 API 设置里保存的预设（getApiPresetNames）。
+//   #3 单聊/群聊顶部点名字 → 资料页：单聊看角色档案，群聊看成员列表（可增删成员）。
+//   #4 表情/图片/世界书等不再 push 新 modal → 全部做成 app 内「底部 sheet」，绝不关闭主 modal。
+//   #5 角色档案含外观/性别（contacts.ts），默认女·高挑御姐火辣身材，可逐个改。
+//   #6 AI 回复像真人发微信：一次多条短气泡（sessionReply/groupReply 返回多条）。
+//   #7 图片/描述：未开本地生图时一律以「文字描述卡」呈现；新增「发描述/旁白」。
+//   #8 提示词可编辑：本 APP 在 world-prompts 注册模板，设置页可改/重置。
+//   #9 群聊一轮多人多段；朋友圈可一次让多位角色评论。
+//   #10 新建联系人可从世界书条目导入设定。
+//   #11/#12 通盘打磨体验：SPA 路由、统一头部/返回、空态、时间戳、滚动定位。
+// 架构：openModal2 仅调用一次（reset+revive）；内部 _view 状态机 + 一个常驻根容器，
+//   重渲染只改根容器 innerHTML，事件用委托绑在根容器上。子面板=app 内 sheet，不堆叠 modal。
+import { esc, qs } from '../../lib/dom-utils';
+import { openModal2 } from '../../status-bar-init';
+import { iconHtml } from '../../lib/icons';
+import { registerWorldApp } from '../../lib/world/world-store';
+import {
+  getContacts, getContact, importPersonaContact,
+  upsertContact, deleteContact, DEFAULT_APPEARANCE, type WorldContact,
+} from '../../lib/world/contacts';
+import { getPersonaList } from '../../lib/ai-summary-store';
+import { getApiPresetNames } from '../../lib/preset-env';
+import {
+  listChats, getChat, createChat, updateChat, updateChatSettings, deleteChat,
+  getMessages, appendMessage, updateMessage, deleteMessage,
+  listMoments, addMoment, deleteMoment, toggleMomentLike, addMomentComment,
+  getStickers, addSticker, deleteSticker,
+  markChatRead, incChatUnread, toggleChatPin, totalUnread,
+  wxSessionId, type WxChat, type WxMessage,
+} from '../../lib/world/wechat-store';
+import { ensureSession } from '../../lib/world/memory';
+import { sessionReply, groupReply, injectWorldOnce, chatGenerate, parseLooseJson } from '../../lib/world/ai-chat';
+import { tryGenImage, isImageBackendReady } from '../../lib/world/media';
+import {
+  registerPromptTemplate, getPromptText, setPromptOverride, resetPrompt, isPromptOverridden, listPromptTemplates,
+} from '../../lib/world/world-prompts';
+import { listWorldbookNames, listWorldbookEntries, isWorldbookAvailable } from '../../lib/world/worldbook';
+import { openSessionMemory } from './memory-center';
+
+const WX_MODAL_MAXW = 'min(900px,96vw)';
+let _busy = false;
+
+// ==================== 提示词模板注册（#8）====================
+registerPromptTemplate({
+  id: 'wechat.single', appId: 'wechat', appName: '微信', name: '单聊回复',
+  desc: '单聊时角色如何回复你。控制「像真人发微信、拆成多条短消息」的风格与分寸。',
+  vars: [{ key: 'maxBubbles', desc: '本轮最多几条消息气泡' }, { key: 'name', desc: '角色昵称' }],
+  default: '从现在起，你就是「{{name}}」本人，正握着手机和「我」用微信聊天。这不是扮演、不是写作文——这是你真实生活里随手发出去的几条消息。\n'
+    + '【先入戏，再开口】把你此刻的处境、心情、和「我」之间的关系全部带进来：你今天可能累、可能甜、可能心里压着事、可能正忙着别的——这些都会自然渗进你打字的语气、用词和回复的快慢里。\n'
+    + '【像真人那样打字】\n'
+    + '· 把想说的拆成 1~{{maxBubbles}} 条短消息，一条一个意思、有先有后，模拟真人「一句一句往外蹦」的节奏，而不是憋成一大段。\n'
+    + '· 允许口语化的真实感：语气词、口头禅、颜文字/emoji（别滥用）、临时改口、突然想起再补一句、半截话——只要符合你的性子。\n'
+    + '· 该热情就热情、该敷衍就敷衍、该撒娇/毒舌/吐槽/沉默就照你的人设来。别讨好、别端着、别像客服，更别每条都解释自己。\n'
+    + '【边界】微信里只有你打出来的字：不要旁白、不要动作神态、不要括号心理活动、不要写小说式长段。\n'
+    + '【输出】严格只输出 JSON：{"messages":["第一条","第二条", ...]}，除此之外不要任何文字。',
+});
+registerPromptTemplate({
+  id: 'wechat.group', appId: 'wechat', appName: '微信', name: '群聊回复',
+  desc: '群聊时多位成员如何接话（一轮可多人、每人可多条）。一次生成多人发言，省 API。',
+  vars: [{ key: 'maxSpeakers', desc: '本轮最多几位成员发言' }, { key: 'maxBubbles', desc: '每位成员最多几条气泡' }],
+  default: '这是一个微信群，群里这些人都是活生生、各有各脾气的朋友，此刻都在线、都半瞄着手机。\n'
+    + '【让群「活」起来】本轮请安排 1~{{maxSpeakers}} 个人冒泡：性子急的先抢话、慢热的后补刀、爱潜水的可能只丢个表情。每人发 1~{{maxBubbles}} 条短消息，一条一句、口语化。\n'
+    + '【群聊的灵魂是「互相」】接梗、起哄、拌嘴、@对方、跑题、玩梗、突然集体安静又突然炸出来——让对话有来有回、有节奏、有温度，而不是每人各自对着你播报一段。后发言的人要像真的看过前面的话那样接。\n'
+    + '【每个人都要像自己】说话贴死各自的人设与当下心情：关系好的损得亲、关系生的客气些、地位高的有底气、爱凑热闹的最先跳出来。\n'
+    + '【边界】不要长文、不要旁白动作、不要括号心理。\n'
+    + '【输出】严格只输出 JSON：{"replies":[{"speaker":"成员名","messages":["第一条","第二条"]}, ...]}，speaker 必须是给定成员之一，数组顺序即真实发言先后，不要任何额外文字。',
+});
+registerPromptTemplate({
+  id: 'wechat.initiate', appId: 'wechat', appName: '微信', name: '单聊·主动找你',
+  desc: '让角色在你没发话时主动发来一条微信（起话头）。',
+  vars: [{ key: 'maxBubbles', desc: '本轮最多几条消息气泡' }, { key: 'name', desc: '角色昵称' }],
+  default: '你是「{{name}}」。此刻「我」没有找你，但你心里有点什么，想主动给我发微信。\n'
+    + '想想此刻最自然的那个理由：突然想起一件事、想分享眼前的画面或心情、有点无聊想找你说话、惦记你、或是有正事要问。挑一个最贴合你当下状态的，自然地开口。\n'
+    + '像真人主动发消息那样：把话拆成 1~{{maxBubbles}} 条短消息，开头不要太用力（真人很少一上来就长篇大论），带着你的语气和小心思。\n'
+    + '不要旁白、不要动作神态、不要括号心理、不要写长段。\n'
+    + '严格只输出 JSON：{"messages":["第一条","第二条", ...]}，除此之外不要任何文字。',
+});
+registerPromptTemplate({
+  id: 'wechat.moment_post', appId: 'wechat', appName: '微信', name: '朋友圈·发动态',
+  desc: '让某位角色发一条朋友圈动态时的写法。',
+  vars: [{ key: 'name', desc: '角色昵称' }],
+  default: '以「{{name}}」的身份，发一条此刻你真想发的朋友圈。\n'
+    + '先想清楚你今天经历了什么、心里在惦记什么——是想炫耀、想 emo、想分享、想阴阳怪气、还是只想留个记号给某个人看？动机决定了语气。\n'
+    + '用你自己的说话方式写，第一人称，60 字以内，要有真实朋友圈那股生活气：可以带点情绪、带点小心思、带点欲言又止的留白，可适度用 emoji 或省略号，但别堆砌。\n'
+    + '别写成作文、别面面俱到——朋友圈是「展示一个瞬间」，不是写日记。直接给正文本身，不要引号、不要标题、不要解释、不要旁白。',
+});
+registerPromptTemplate({
+  id: 'wechat.moment_comment', appId: 'wechat', appName: '微信', name: '朋友圈·评论',
+  desc: '让角色评论某条朋友圈时的写法（可一次多位角色各评一句）。',
+  vars: [{ key: 'roster', desc: '参与评论的角色及人设' }, { key: 'moment', desc: '被评论的动态内容' }],
+  default: '下面有一条朋友圈，这些人刷到了，各自想冒泡评论一句。\n'
+    + '让每个人按自己的人设、以及跟发圈者的关系来评：要好的可以调侃、玩梗、戳痛处；不熟的客气点；爱凑热闹的接梗、爱关心的追问、爱阴阳的来一句。\n'
+    + '每句 30 字内，口语化、带那个人的味儿，别像群发祝福、别每条都彬彬有礼。彼此之间也可以隔着评论区斗两句嘴。参与者及人设：\n{{roster}}\n\n'
+    + '这条朋友圈内容是：{{moment}}\n\n'
+    + '严格只输出 JSON：{"comments":[{"speaker":"角色名","text":"评论"}, ...]}，speaker 必须是上面给定角色之一，不要任何额外文字。',
+});
+
+// MARK_STATE
+
+// ==================== 视图状态机（单 modal SPA）====================
+type ViewName = 'list' | 'contacts' | 'moments' | 'chat' | 'chatset' | 'contactEdit' | 'newChat' | 'groupInfo';
+type ViewState = {
+  name: ViewName;
+  chatId?: string;       // chat / chatset
+  contactId?: string | null; // contactEdit（null=新建）
+};
+let _view: ViewState = { name: 'list' };
+// app 内底部 sheet（不堆叠 modal，#4）：null=无；否则渲染对应 sheet。
+type SheetState =
+  | { kind: 'sticker'; chatId: string }
+  | { kind: 'compose'; chatId: string; mode: 'image' | 'desc' | 'voice' }
+  | { kind: 'wbPick' }                                  // 世界书条目选择（联系人编辑用）
+  | { kind: 'prompt'; id: string }                      // 提示词编辑
+  | null;
+let _sheet: SheetState = null;
+// 暂存：联系人编辑表单（从世界书 sheet 回填用，避免重渲染丢输入）
+let _ceDraft: Partial<WorldContact> | null = null;
+
+const RID = 'th-wx-app-root';
+let _opening = false; // render→openApp 重入保护，防止根容器缺失时无限递归
+function rootEl(): HTMLElement | null { return qs<HTMLElement>('#' + RID); }
+
+// 顶部头部（标题 + 可选返回 + 右侧操作槽）
+function headHtml(title: string, opts?: { back?: ViewName | 'list'; ops?: string }): string {
+  const back = opts?.back
+    ? `<button class="th-wx-back" data-wx-go="${esc(opts.back)}" type="button">${iconHtml('fa-arrow-left')}</button>`
+    : '';
+  return `<div class="th-wx-subhead">
+    ${back}<span class="th-wx-subtitle">${title}</span>
+    <span class="th-wx-head-ops">${opts?.ops || ''}</span>
+  </div>`;
+}
+
+function timeLabel(ts: number): string {
+  try {
+    const d = new Date(ts); const now = new Date();
+    const hh = String(d.getHours()).padStart(2, '0'); const mm = String(d.getMinutes()).padStart(2, '0');
+    if (d.toDateString() === now.toDateString()) return `${hh}:${mm}`;
+    return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
+  } catch (e) { void e; return ''; }
+}
+
+// MARK_HELPERS
+
+function toast(kind: 'success' | 'error' | 'info' | 'warning', msg: string): void {
+  try { (window as any).toastr?.[kind]?.(msg); } catch (e) { void e; }
+}
+function ask(msg: string, def = ''): string | null {
+  try { const v = (window as any).prompt?.(msg, def); return v == null ? null : String(v); } catch (e) { void e; return null; }
+}
+function confirmBox(msg: string): boolean {
+  try { return !!(window as any).confirm?.(msg); } catch (e) { void e; return false; }
+}
+
+// 头像：有 url 用图，无则取昵称首字（玩家用「我」）。
+function avatarHtml(name: string, url?: string, cls = ''): string {
+  if (url) return `<span class="th-wx-avatar ${cls}" style="background-image:url('${esc(url)}')"></span>`;
+  const ch = (name || '?').trim().charAt(0) || '?';
+  return `<span class="th-wx-avatar th-wx-avatar-txt ${cls}">${esc(ch)}</span>`;
+}
+function contactName(id: string): string {
+  if (id === 'me') return '我';
+  return getContact(id)?.name || '未知';
+}
+function contactAvatar(id: string): string {
+  if (id === 'me') return avatarHtml('我');
+  const c = getContact(id);
+  return avatarHtml(c?.name || '?', c?.avatar);
+}
+// 组对话用：把外观+性别拼进人设（#5 外观随人格走）
+function fullPersona(c: WorldContact | undefined): string {
+  if (!c) return '一位朋友';
+  const parts = [c.persona || c.name];
+  const look = [c.gender ? `性别：${c.gender}` : '', c.appearance ? `外观：${c.appearance}` : ''].filter(Boolean).join('；');
+  if (look) parts.push('【人物形象】' + look);
+  return parts.filter(Boolean).join('\n');
+}
+function groupMembers(chat: WxChat): { name: string; persona: string }[] {
+  return chat.contactIds.map(id => getContact(id)).filter(Boolean).map(c => ({
+    name: (c as WorldContact).name,
+    persona: fullPersona(c as WorldContact),
+  }));
+}
+
+// ==================== 中央渲染 / 导航 ====================
+function render(): void {
+  const root = rootEl();
+  if (!root) {
+    // 根容器尚未挂载：仅在未重入时补一次 openApp，避免 openApp→render→openApp 无限递归爆栈。
+    if (_opening) return;
+    _opening = true;
+    try { openApp(); } finally { _opening = false; }
+    return;
+  }
+  root.innerHTML = viewHtml() + sheetHtml();
+  // 进入会话时确保记忆会话存在 + 清未读
+  if (_view.name === 'chat' && _view.chatId) {
+    const chat = getChat(_view.chatId);
+    if (chat) { ensureSession({ id: wxSessionId(_view.chatId), appId: 'wechat', appName: '微信', title: chat.name }); markChatRead(_view.chatId); }
+    scrollMsgsBottom();
+  }
+}
+function go(v: ViewState): void { _view = v; _sheet = null; render(); }
+function openSheet(s: SheetState): void { _sheet = s; render(); }
+function closeSheet(): void { _sheet = null; render(); }
+
+function scrollMsgsBottom(): void {
+  try { const box = rootEl()?.querySelector('.th-wx-msgs') as HTMLElement | null; if (box) box.scrollTop = box.scrollHeight; } catch (e) { void e; }
+}
+
+// 根据 _view 渲染主体
+function viewHtml(): string {
+  switch (_view.name) {
+    case 'contacts': return contactsHtml();
+    case 'moments': return momentsHtml();
+    case 'chat': return chatHtml(_view.chatId || '');
+    case 'chatset': return chatSettingsHtml(_view.chatId || '');
+    case 'contactEdit': return contactEditHtml(_view.contactId ?? null);
+    case 'newChat': return newChatHtml();
+    case 'groupInfo': return groupInfoHtml(_view.chatId || '');
+    case 'list': default: return listHtml();
+  }
+}
+
+// MARK_LIST
+
+// ==================== 聊天列表（首页）====================
+// #6 三个主 tab（聊天/通讯录/朋友圈）共用底部导航栏，点击在同一界面内切换，不再像翻页那样带返回按钮。
+function phoneTabbar(active: 'list' | 'contacts' | 'moments'): string {
+  const unread = totalUnread();
+  const tab = (key: string, icon: string, label: string, badge = 0) =>
+    `<button class="th-wx-navbtn${active === key ? ' th-wx-navbtn-on' : ''}" data-wx-go="${key}" type="button">
+      <span class="th-wx-navico">${iconHtml(icon)}${badge > 0 ? `<span class="th-wx-navbadge">${badge > 99 ? '99+' : badge}</span>` : ''}</span>
+      <span class="th-wx-navlbl">${label}</span>
+    </button>`;
+  return `<div class="th-wx-navbar">
+    ${tab('list', 'fa-comment-dots', '聊天', unread)}
+    ${tab('contacts', 'fa-address-book', '通讯录')}
+    ${tab('moments', 'fa-camera', '朋友圈')}
+  </div>`;
+}
+
+function listHtml(): string {
+  const chats = listChats();
+  const rows = chats.length ? chats.map(c => {
+    const unread = c.unread || 0;
+    const pinned = c.pinned ? ' th-wx-chat-pinned' : '';
+    return `
+    <button class="th-wx-chat-row${pinned}" data-wx-open="${esc(c.id)}" type="button" data-wx-chatrow="${esc(c.id)}">
+      <span class="th-wx-chat-avwrap">
+        ${c.kind === 'group' ? avatarHtml(c.name, undefined, 'th-wx-avatar-group') : contactAvatar(c.contactIds[0] || '')}
+        ${unread > 0 ? `<span class="th-wx-unread">${unread > 99 ? '99+' : unread}</span>` : ''}
+      </span>
+      <span class="th-wx-chat-mid">
+        <span class="th-wx-chat-name">${esc(c.name)} ${c.kind === 'group' ? `<span class="th-wx-chat-tag">群 ${c.contactIds.length}</span>` : ''}${c.pinned ? `<span class="th-wx-pin-flag" title="置顶">${iconHtml('fa-thumbtack')}</span>` : ''}</span>
+        <span class="th-wx-chat-last">${esc(c.lastText || '还没有消息')}</span>
+      </span>
+      <span class="th-wx-chat-time">${c.lastAt ? timeLabel(c.lastAt) : ''}</span>
+    </button>`;
+  }).join('')
+    : `<div class="th-wx-empty">${iconHtml('fa-comment-dots')}<div>还没有会话</div>
+        <div class="th-wx-empty-sub">点右上「+」发起单聊或群聊，或去通讯录里找人开聊</div></div>`;
+  return `<div class="th-wx-view th-wx-tabview">
+    <div class="th-wx-topbar"><span class="th-wx-topttl">微信</span>
+      <button class="th-wx-topadd" data-wx-go="newChat" type="button" title="发起会话">${iconHtml('fa-plus')}</button></div>
+    <div class="th-wx-list">${rows}</div>
+    ${phoneTabbar('list')}
+  </div>`;
+}
+
+// ==================== 发起会话 ====================
+function newChatHtml(): string {
+  const contacts = getContacts();
+  const list = contacts.length ? contacts.map(c => `
+    <label class="th-wx-pick-row">
+      <input type="checkbox" class="th-wx-pick" value="${esc(c.id)}">
+      ${avatarHtml(c.name, c.avatar)}
+      <span class="th-wx-pick-name">${esc(c.name)}</span>
+      <span class="th-wx-pick-src">${srcLabel(c.source)}</span>
+    </label>`).join('')
+    : `<div class="th-wx-empty-sub" style="padding:16px">通讯录还没有联系人，先去「通讯录」添加。</div>`;
+  return `<div class="th-wx-view">
+    ${headHtml('发起会话', { back: 'list' })}
+    <div class="th-wx-newchat-hint">勾选 1 人发起单聊；勾选多人发起群聊。</div>
+    <div class="th-wx-pick-list">${list}</div>
+    <div class="th-wx-newchat-foot">
+      <input type="text" class="th-wx-field th-wx-group-name" placeholder="群名（多选时填，可留空自动取名）">
+      <button class="th-wx-primary" data-wx-create type="button">${iconHtml('fa-check')} 创建会话</button>
+    </div>
+  </div>`;
+}
+function srcLabel(s: WorldContact['source']): string {
+  return s === 'persona' ? '人格' : s === 'charcard' ? '角色卡' : s === 'worldbook' ? '世界书' : '自定义';
+}
+
+// MARK_CHAT
+
+// ==================== 单聊 / 群聊 对话视图 ====================
+function bubbleInner(m: WxMessage): string {
+  if (m.kind === 'image') {
+    return m.imageUrl
+      ? `<img class="th-wx-img" src="${esc(m.imageUrl)}" alt="${esc(m.content)}">`
+      : `<div class="th-wx-desccard"><span class="th-wx-desccard-tag">${iconHtml('fa-image')} 图片</span><span class="th-wx-desccard-txt">${esc(m.content || '一张图片')}</span></div>`;
+  }
+  if (m.kind === 'desc') {
+    return `<div class="th-wx-desccard th-wx-desccard-act"><span class="th-wx-desccard-tag">${iconHtml('fa-feather')} 描述</span><span class="th-wx-desccard-txt">${esc(m.content)}</span></div>`;
+  }
+  if (m.kind === 'voice') {
+    // 语音条降级：无 TTS，用「语音条样式 + 转文字」呈现
+    const sec = m.voiceSec || Math.max(1, Math.min(60, Math.round((m.content || '').length / 3)));
+    return `<div class="th-wx-voice"><span class="th-wx-voice-bar">${iconHtml('fa-volume-high')}<span class="th-wx-voice-wave"></span><span class="th-wx-voice-sec">${sec}″</span></span>
+      <span class="th-wx-voice-txt">${esc(m.content)}</span></div>`;
+  }
+  if (m.kind === 'sticker') {
+    return m.imageUrl ? `<img class="th-wx-sticker-img" src="${esc(m.imageUrl)}" alt="${esc(m.content)}">` : `<div class="th-wx-sticker">${esc(m.content)}</div>`;
+  }
+  const quote = m.replyToText
+    ? `<div class="th-wx-quote">${esc(m.replyToName || '')}${m.replyToName ? '：' : ''}${esc(m.replyToText.slice(0, 40))}</div>`
+    : '';
+  return `${quote}<div class="th-wx-text">${esc(m.content)}</div>`;
+}
+
+function bubbleHtml(chat: WxChat, m: WxMessage): string {
+  // 系统提示（拍一拍等）：居中灰字
+  if (m.kind === 'system') {
+    return `<div class="th-wx-sysmsg">${esc(m.content)}</div>`;
+  }
+  const mine = m.senderId === 'me';
+  const side = mine ? 'th-wx-b-me' : 'th-wx-b-other';
+  if (m.recalled) {
+    return `<div class="th-wx-bubble-row ${side}"><div class="th-wx-recalled">${esc(mine ? '你' : contactName(m.senderId))}撤回了一条消息</div></div>`;
+  }
+  const nameLine = (chat.kind === 'group' && !mine) ? `<div class="th-wx-sender">${esc(contactName(m.senderId))}</div>` : '';
+  const ops = `<div class="th-wx-msg-ops">
+    ${!mine ? `<button data-wx-reroll title="重新生成">${iconHtml('fa-rotate')}</button>` : ''}
+    <button data-wx-reply title="引用回复">${iconHtml('fa-reply')}</button>
+    ${!mine ? `<button data-wx-pat title="拍一拍">${iconHtml('fa-hand')}</button>` : ''}
+    <button data-wx-edit title="编辑">${iconHtml('fa-pen')}</button>
+    <button data-wx-recall title="撤回">${iconHtml('fa-rotate-left')}</button>
+    <button data-wx-delmsg title="删除">${iconHtml('fa-xmark')}</button>
+  </div>`;
+  return `<div class="th-wx-bubble-row ${side}" data-wx-msg="${esc(m.id)}">
+    ${mine ? '' : `<span class="th-wx-av-wrap" data-wx-msg-av="${esc(m.senderId)}">${contactAvatar(m.senderId)}</span>`}
+    <div class="th-wx-bubble-wrap">
+      ${nameLine}
+      <div class="th-wx-bubble">${bubbleInner(m)}</div>
+      ${ops}
+    </div>
+    ${mine ? contactAvatar('me') : ''}
+  </div>`;
+}
+
+// 聊天时间分隔：相邻消息间隔超过阈值（5 分钟）插一条时间分隔
+function needTimeDivider(prev: WxMessage | undefined, cur: WxMessage): boolean {
+  if (!prev) return true;
+  return (cur.ts - prev.ts) > 5 * 60 * 1000;
+}
+function timeDividerHtml(ts: number): string {
+  return `<div class="th-wx-time-div"><span>${esc(timeLabel(ts))}</span></div>`;
+}
+
+function chatHtml(chatId: string): string {
+  const chat = getChat(chatId);
+  if (!chat) return `<div class="th-wx-view">${headHtml('会话不存在', { back: 'list' })}</div>`;
+  const msgs = getMessages(chatId);
+  const body = msgs.length
+    ? msgs.map((m, i) => (needTimeDivider(msgs[i - 1], m) ? timeDividerHtml(m.ts) : '') + bubbleHtml(chat, m)).join('')
+    : `<div class="th-wx-empty">${iconHtml('fa-comment-dots')}<div>还没有消息</div>
+        <div class="th-wx-empty-sub">打个招呼吧～发出第一条，${esc(chat.name)} 就会像真人一样回你几条消息。</div></div>`;
+  // 设计补充：「对方正在输入…」动态气泡（_busy 且在本会话时显示）
+  const typing = (_busy && _view.name === 'chat' && _view.chatId === chatId)
+    ? `<div class="th-wx-row th-wx-typing-row">${contactAvatar(chat.contactIds[0] || '')}
+        <div class="th-wx-bubble-wrap"><div class="th-wx-bubble th-wx-typing"><span></span><span></span><span></span></div></div></div>`
+    : '';
+
+  const groupBar = (chat.kind === 'group' && !chat.settings.groupAutoSpeaker) ? `
+    <div class="th-wx-groupbar">指定发言：
+      <select class="th-wx-field th-wx-speaker">
+        <option value="">（本轮自动）</option>
+        ${chat.contactIds.map(id => `<option value="${esc(contactName(id))}">${esc(contactName(id))}</option>`).join('')}
+      </select>
+    </div>` : '';
+
+  const imgReady = isImageBackendReady();
+  const ops = `
+    <button data-wx-initiate type="button" title="让对方主动发条消息">${iconHtml('fa-bell')}</button>
+    <button data-wx-info type="button" title="${chat.kind === 'group' ? '群资料' : '资料'}">${iconHtml('fa-circle-info')}</button>
+    <button data-wx-memory type="button" title="记忆">${iconHtml('fa-brain')}</button>
+    <button data-wx-chatset type="button" title="设置">${iconHtml('fa-gear')}</button>`;
+  const title = `${esc(chat.name)}${chat.kind === 'group' ? ` <span class="th-wx-chat-tag">群 ${chat.contactIds.length}</span>` : ''}`;
+
+  return `<div class="th-wx-view th-wx-chat" data-wx-cid="${esc(chat.id)}">
+    ${headHtml(title, { back: 'list', ops })}
+    ${chat.settings.injectEnabled ? `<div class="th-wx-inject-flag">${iconHtml('fa-syringe')} 注入正文已开：本会话摘要会喂给下次酒馆生成</div>` : ''}
+    <div class="th-wx-msgs">${body}${typing}</div>
+    ${groupBar}
+    ${(_replyTo && _view.chatId === chatId) ? `<div class="th-wx-replybar">${iconHtml('fa-reply')} 回复 ${esc(_replyTo.name)}：${esc(_replyTo.text.slice(0, 30))}<button class="th-wx-replybar-x" data-wx-reply-cancel type="button">${iconHtml('fa-xmark')}</button></div>` : ''}
+    <div class="th-wx-inputbar">
+      <button class="th-wx-tool" data-wx-sticker type="button" title="表情">${iconHtml('fa-face-smile')}</button>
+      <button class="th-wx-tool" data-wx-image type="button" title="${imgReady ? '发图片（AI 生成）' : '发图片（未配置后端，将以文字描述卡呈现）'}">${iconHtml('fa-image')}</button>
+      <button class="th-wx-tool" data-wx-desc type="button" title="发描述／旁白（文字卡）">${iconHtml('fa-feather')}</button>
+      <button class="th-wx-tool" data-wx-voice type="button" title="发语音（无 TTS，转文字呈现）">${iconHtml('fa-microphone')}</button>
+      <textarea class="th-wx-field th-wx-input" rows="1" placeholder="说点什么…"></textarea>
+      <button class="th-wx-send" data-wx-send type="button">${iconHtml('fa-paper-plane')}</button>
+    </div>
+  </div>`;
+}
+
+// MARK_CHATSET
+
+// ==================== 单会话设置 ====================
+function chatSettingsHtml(chatId: string): string {
+  const chat = getChat(chatId);
+  if (!chat) return `<div class="th-wx-view">${headHtml('会话不存在', { back: 'list' })}</div>`;
+  const s = chat.settings;
+  // #2 API 预设下拉：列总 API 设置里保存的预设
+  const presets = getApiPresetNames();
+  const presetOpts = `<option value="">（跟随全局活动预设）</option>`
+    + presets.map(n => `<option value="${esc(n)}" ${s.aiPresetName === n ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const groupRows = chat.kind === 'group' ? `
+    <label class="th-wx-set-row">
+      <span>群聊发言：AI 自选发言角色<br><small>关闭则每轮由你在聊天界面指定谁说话</small></span>
+      <input type="checkbox" class="th-wx-set-autospk" ${s.groupAutoSpeaker ? 'checked' : ''}>
+    </label>
+    <label class="th-wx-set-row">
+      <span>一轮多人发言（#9）<br><small>开启后一次生成可有多位成员接话，更热闹也更省 API</small></span>
+      <input type="checkbox" class="th-wx-set-multi" ${s.multiSpeaker !== false ? 'checked' : ''}>
+    </label>
+    <label class="th-wx-set-row">
+      <span>本轮最多发言人数<br><small>多人发言时一轮最多几位成员说话</small></span>
+      <input type="number" min="1" max="6" class="th-wx-field th-wx-set-maxspk" value="${esc(String(s.maxSpeakers ?? 3))}">
+    </label>` : '';
+  return `<div class="th-wx-view" data-wx-cid="${esc(chat.id)}">
+    ${headHtml(`${esc(chat.name)} · 设置`, { back: 'chat' })}
+    <div class="th-wx-set-group">
+      <label class="th-wx-set-row">
+        <span>每条回复最多气泡数<br><small>角色像真人发微信那样把话拆成几条短消息（1~8）</small></span>
+        <input type="number" min="1" max="8" class="th-wx-field th-wx-set-bubbles" value="${esc(String(s.maxBubbles ?? (chat.kind === 'group' ? 3 : 5)))}">
+      </label>
+      <label class="th-wx-set-row">
+        <span>读取酒馆正文楼层数<br><small>0=不读；>0 则把最近 N 楼正文作参考喂给对方</small></span>
+        <input type="number" min="0" class="th-wx-field th-wx-set-floors" value="${esc(String(s.readFloors))}">
+      </label>
+      <label class="th-wx-set-row">
+        <span>注入正文（默认关）<br><small>开启后本会话对话摘要会喂给下次酒馆生成，让正文知道你刚聊了什么。走 injectPrompts，不改聊天楼层</small></span>
+        <input type="checkbox" class="th-wx-set-inject" ${s.injectEnabled ? 'checked' : ''}>
+      </label>
+      ${groupRows}
+      <label class="th-wx-set-row th-wx-set-row-stack">
+        <span>指定 API 预设（可选）</span>
+        <select class="th-wx-field th-wx-set-preset">${presetOpts}</select>
+      </label>
+      <div class="th-wx-set-row th-wx-set-row-stack">
+        <span>提示词（#8 可编辑本 APP 的 AI 行为）</span>
+        <div class="th-wx-prompt-links">
+          ${listPromptTemplates('wechat').map(t => `<button class="th-wx-chip th-wx-chip-sm" data-wx-prompt="${esc(t.id)}" type="button">${iconHtml('fa-pen')} ${esc(t.name)}${isPromptOverridden(t.id) ? ' ·改' : ''}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="th-wx-set-actions">
+      <button class="th-wx-chip" data-wx-set-pin type="button">${iconHtml('fa-thumbtack')} ${chat.pinned ? '取消置顶' : '置顶会话'}</button>
+      <button class="th-wx-primary" data-wx-set-save type="button">${iconHtml('fa-check')} 保存</button>
+      <button class="th-wx-danger" data-wx-set-del type="button">${iconHtml('fa-trash')} 删除会话</button>
+    </div>
+  </div>`;
+}
+
+// MARK_CONTACTS
+
+// ==================== 通讯录 ====================
+function contactsHtml(): string {
+  const contacts = getContacts();
+  const rows = contacts.length ? contacts.map(c => `
+    <div class="th-wx-ct-row" data-wx-ct="${esc(c.id)}">
+      ${avatarHtml(c.name, c.avatar)}
+      <span class="th-wx-ct-mid">
+        <span class="th-wx-ct-name">${esc(c.name)} <span class="th-wx-ct-badge">${esc((c.gender || '女'))}</span></span>
+        <span class="th-wx-ct-note">${esc(c.note || c.appearance || srcLabel(c.source))}</span>
+      </span>
+      <span class="th-wx-ct-ops">
+        <button data-wx-ct-chat type="button" title="发消息">${iconHtml('fa-comment-dots')}</button>
+        <button data-wx-ct-edit type="button" title="编辑">${iconHtml('fa-pen')}</button>
+        <button data-wx-ct-del type="button" title="删除">${iconHtml('fa-xmark')}</button>
+      </span>
+    </div>`).join('')
+    : `<div class="th-wx-empty">${iconHtml('fa-id-card')}<div>通讯录还是空的</div>
+        <div class="th-wx-empty-sub">从人格／世界书导入，或新建自定义联系人</div></div>`;
+  return `<div class="th-wx-view th-wx-tabview">
+    <div class="th-wx-topbar"><span class="th-wx-topttl">通讯录</span></div>
+    <div class="th-wx-ct-toolbar">
+      <button class="th-wx-chip" data-wx-ct-import type="button">${iconHtml('fa-user-tie')} 从人格导入</button>
+      <button class="th-wx-chip" data-wx-ct-new type="button">${iconHtml('fa-plus')} 新建联系人</button>
+    </div>
+    <div class="th-wx-ct-list">${rows}</div>
+    ${phoneTabbar('contacts')}
+  </div>`;
+}
+
+// ==================== 联系人编辑（新建/编辑）====================
+function contactEditHtml(id: string | null): string {
+  // 优先用草稿（从世界书 sheet 返回时回填），否则读库
+  const stored = id ? getContact(id) : null;
+  const c: Partial<WorldContact> = _ceDraft ? _ceDraft : (stored || { gender: '女', appearance: DEFAULT_APPEARANCE });
+  const wbBtn = isWorldbookAvailable()
+    ? `<button class="th-wx-chip" data-wx-ce-wb type="button">${iconHtml('fa-book')} 从世界书条目导入设定</button>` : '';
+  return `<div class="th-wx-view" data-wx-ctid="${esc(id || '')}">
+    ${headHtml(stored ? '编辑联系人' : '新建联系人', { back: 'contacts' })}
+    <div class="th-wx-set-group">
+      <label class="th-wx-set-row th-wx-set-row-stack"><span>昵称</span>
+        <input type="text" class="th-wx-field th-wx-ce-name" value="${esc(c.name || '')}" placeholder="联系人昵称"></label>
+      <div class="th-wx-set-row th-wx-set-row-2">
+        <label class="th-wx-set-sub"><span>性别</span>
+          <input type="text" class="th-wx-field th-wx-ce-gender" value="${esc(c.gender || '女')}" placeholder="女"></label>
+        <label class="th-wx-set-sub"><span>头像 URL（留空用首字）</span>
+          <input type="text" class="th-wx-field th-wx-ce-avatar" value="${esc(c.avatar || '')}" placeholder="http://… 或留空"></label>
+      </div>
+      <label class="th-wx-set-row th-wx-set-row-stack"><span>外观／形象（#5：性别、身材、长相、气质）</span>
+        <textarea class="th-wx-field th-wx-ce-appearance" rows="3" placeholder="高挑御姐火辣身材…">${esc(c.appearance || '')}</textarea></label>
+      <label class="th-wx-set-row th-wx-set-row-stack"><span>角色设定（性格、说话风格、关系…）</span>
+        <textarea class="th-wx-field th-wx-ce-persona" rows="5" placeholder="这位联系人是谁、性格、和你的关系…">${esc(c.persona || '')}</textarea></label>
+      <label class="th-wx-set-row th-wx-set-row-stack"><span>固定形象 tag（可选，comfyui 出图保持一致）</span>
+        <input type="text" class="th-wx-field th-wx-ce-imgtag" value="${esc(c.imageTag || '')}" placeholder="如 1girl, silver hair, …"></label>
+      <label class="th-wx-set-row th-wx-set-row-stack"><span>备注（可选）</span>
+        <input type="text" class="th-wx-field th-wx-ce-note" value="${esc(c.note || '')}" placeholder="备注"></label>
+    </div>
+    <div class="th-wx-set-actions th-wx-set-actions-wrap">
+      ${wbBtn}
+      <button class="th-wx-chip" data-wx-ce-genavatar type="button" title="${isImageBackendReady() ? '用形象 tag 生成头像' : '未配置图片后端'}">${iconHtml('fa-image')} 生成头像</button>
+      <button class="th-wx-primary" data-wx-ce-save type="button">${iconHtml('fa-check')} 保存</button>
+    </div>
+  </div>`;
+}
+
+// ==================== 群资料（#3：成员列表 + 增删）====================
+function groupInfoHtml(chatId: string): string {
+  const chat = getChat(chatId);
+  if (!chat || chat.kind !== 'group') return `<div class="th-wx-view">${headHtml('群资料', { back: 'list' })}</div>`;
+  const members = chat.contactIds.map(id => getContact(id)).filter(Boolean) as WorldContact[];
+  const memHtml = members.map(c => `
+    <div class="th-wx-ct-row" data-wx-gm="${esc(c.id)}">
+      ${avatarHtml(c.name, c.avatar)}
+      <span class="th-wx-ct-mid">
+        <span class="th-wx-ct-name">${esc(c.name)} <span class="th-wx-ct-badge">${esc(c.gender || '女')}</span></span>
+        <span class="th-wx-ct-note">${esc(c.appearance || c.persona || '')}</span>
+      </span>
+      <span class="th-wx-ct-ops"><button data-wx-gm-del type="button" title="移出群聊">${iconHtml('fa-xmark')}</button></span>
+    </div>`).join('');
+  // 可加入的联系人（不在群里的）
+  const candidates = getContacts().filter(c => !chat.contactIds.includes(c.id));
+  const addOpts = candidates.length
+    ? `<select class="th-wx-field th-wx-gm-add-sel">${candidates.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>
+       <button class="th-wx-chip" data-wx-gm-add type="button">${iconHtml('fa-plus')} 加入</button>`
+    : `<span class="th-wx-empty-sub">没有可加入的联系人了</span>`;
+  return `<div class="th-wx-view" data-wx-cid="${esc(chat.id)}">
+    ${headHtml(`${esc(chat.name)} · 群资料`, { back: 'chat' })}
+    <div class="th-wx-set-group">
+      <label class="th-wx-set-row th-wx-set-row-stack"><span>群名</span>
+        <input type="text" class="th-wx-field th-wx-gi-name" value="${esc(chat.name)}"></label>
+      <div class="th-wx-subhead-inner">群成员 ${members.length}</div>
+      <div class="th-wx-ct-list">${memHtml}</div>
+      <div class="th-wx-gm-addbar">${addOpts}</div>
+    </div>
+    <div class="th-wx-set-actions">
+      <button class="th-wx-primary" data-wx-gi-save type="button">${iconHtml('fa-check')} 保存群名</button>
+    </div>
+  </div>`;
+}
+
+// MARK_MOMENTS
+
+// ==================== 朋友圈 ====================
+function momentCardHtml(moId: string): string {
+  const mo = listMoments().find(x => x.id === moId);
+  if (!mo) return '';
+  const likeNames = mo.likes.map(contactName).join('、');
+  const comments = mo.comments.map(cm => `<div class="th-wx-mo-cm"><b>${esc(contactName(cm.authorId))}：</b>${esc(cm.text)}</div>`).join('');
+  const img = mo.imageUrl
+    ? `<img class="th-wx-mo-img" src="${esc(mo.imageUrl)}" alt="配图">`
+    : '';
+  return `<div class="th-wx-mo" data-wx-mo="${esc(mo.id)}">
+    <div class="th-wx-mo-head">${contactAvatar(mo.authorId)}<span class="th-wx-mo-author">${esc(contactName(mo.authorId))}</span><span class="th-wx-mo-time">${timeLabel(mo.ts)}</span></div>
+    <div class="th-wx-mo-text">${esc(mo.text)}</div>
+    ${img}
+    <div class="th-wx-mo-ops">
+      <button data-wx-mo-like type="button" class="${mo.likes.includes('me') ? 'on' : ''}">${iconHtml('fa-heart')} ${mo.likes.length || ''}</button>
+      <button data-wx-mo-cm type="button">${iconHtml('fa-comment')} 评论</button>
+      <button data-wx-mo-aicm type="button" title="让角色评论">${iconHtml('fa-comment-dots')} AI评论</button>
+      <button data-wx-mo-del type="button">${iconHtml('fa-xmark')}</button>
+    </div>
+    ${likeNames ? `<div class="th-wx-mo-likes">${iconHtml('fa-heart')} ${esc(likeNames)}</div>` : ''}
+    ${comments ? `<div class="th-wx-mo-cms">${comments}</div>` : ''}
+  </div>`;
+}
+
+function momentsHtml(): string {
+  const moments = listMoments();
+  const body = moments.length ? moments.map(m => momentCardHtml(m.id)).join('')
+    : `<div class="th-wx-empty">${iconHtml('fa-camera')}<div>朋友圈还没有动态</div>
+        <div class="th-wx-empty-sub">发条动态，或让角色发一条</div></div>`;
+  return `<div class="th-wx-view th-wx-tabview">
+    <div class="th-wx-topbar"><span class="th-wx-topttl">朋友圈</span></div>
+    <div class="th-wx-mo-toolbar">
+      <button class="th-wx-chip" data-wx-mo-post type="button">${iconHtml('fa-plus')} 我发一条</button>
+      <button class="th-wx-chip" data-wx-mo-aipost type="button">${iconHtml('fa-user-tie')} 角色发一条</button>
+    </div>
+    <div class="th-wx-mo-list">${body}</div>
+    ${phoneTabbar('moments')}
+  </div>`;
+}
+
+// MARK_SHEETS
+
+// ==================== app 内底部 sheet（不堆叠 modal，#4）====================
+function sheetHtml(): string {
+  if (!_sheet) return '';
+  let inner = '';
+  let title = '';
+  if (_sheet.kind === 'sticker') {
+    title = '表情';
+    const stickers = getStickers();
+    const grid = stickers.map(s => `
+      <button class="th-wx-st-cell" data-wx-st="${esc(s.id)}" type="button" title="${esc(s.name)}">
+        ${s.url ? `<img src="${esc(s.url)}" alt="${esc(s.name)}">` : `<span class="th-wx-st-emoji">${esc(s.name)}</span>`}
+        <span class="th-wx-st-del" data-wx-st-del="${esc(s.id)}" title="删除">${iconHtml('fa-xmark')}</span>
+      </button>`).join('');
+    inner = `<div class="th-wx-st-grid">${grid || '<div class="th-wx-empty-sub">暂无表情</div>'}</div>
+      <div class="th-wx-st-add">
+        <input type="text" class="th-wx-field th-wx-st-name" placeholder="表情文字（emoji 或文字）">
+        <input type="text" class="th-wx-field th-wx-st-url" placeholder="图片 URL（可选）">
+        <button class="th-wx-primary" data-wx-st-add type="button">${iconHtml('fa-plus')} 添加</button>
+      </div>`;
+  } else if (_sheet.kind === 'compose') {
+    const isImg = _sheet.mode === 'image';
+    const isVoice = _sheet.mode === 'voice';
+    title = isImg ? '发图片' : isVoice ? '发语音' : '发描述／旁白';
+    const hint = isImg
+      ? (isImageBackendReady() ? '描述要发送的图片，AI 会生成图片。' : '未配置本地生图后端：将以「文字描述卡」形式发出（#7）。')
+      : isVoice
+        ? '本套件不接 TTS：语音会以「语音条样式 + 转文字」呈现，对方也能读到内容。'
+        : '发一段旁白／动作／场景描述，会以文字描述卡的形式显示（不触发 AI 回复）。';
+    inner = `<div class="th-wx-compose-hint">${esc(hint)}</div>
+      <textarea class="th-wx-field th-wx-compose-input" rows="3" placeholder="${isImg ? '一张…的图片' : isVoice ? '（说点什么，会转成语音条）' : '（你做了什么 / 场景如何…）'}"></textarea>
+      <div class="th-wx-sheet-actions">
+        <button class="th-wx-primary" data-wx-compose-send type="button">${iconHtml('fa-paper-plane')} 发送</button>
+      </div>`;
+  } else if (_sheet.kind === 'wbPick') {
+    title = '从世界书导入条目';
+    inner = `<div class="th-wx-wb-pick">
+      <select class="th-wx-field th-wx-wb-book"><option value="">选择世界书…</option>${listWorldbookNames().map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>
+      <div class="th-wx-wb-entries"><div class="th-wx-empty-sub">先选一本世界书</div></div>
+    </div>`;
+  } else if (_sheet.kind === 'prompt') {
+    const tpl = listPromptTemplates('wechat').find(t => t.id === (_sheet as any).id);
+    title = '提示词 · ' + (tpl?.name || '');
+    const varsHtml = (tpl?.vars || []).map(v => `<code>{{${esc(v.key)}}}</code> ${esc(v.desc)}`).join('　');
+    inner = `<div class="th-wx-prompt-edit">
+      <div class="th-wx-compose-hint">${esc(tpl?.desc || '')}</div>
+      ${varsHtml ? `<div class="th-wx-prompt-vars">可用占位符：${varsHtml}</div>` : ''}
+      <textarea class="th-wx-field th-wx-prompt-text" rows="8">${esc(getPromptText((_sheet as any).id))}</textarea>
+      <div class="th-wx-sheet-actions">
+        <button class="th-wx-chip" data-wx-prompt-reset type="button">${iconHtml('fa-rotate-left')} 恢复默认</button>
+        <button class="th-wx-primary" data-wx-prompt-save type="button">${iconHtml('fa-check')} 保存</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="th-wx-sheet-mask" data-wx-sheet-close>
+    <div class="th-wx-sheet" data-wx-sheet-body>
+      <div class="th-wx-sheet-head"><span>${esc(title)}</span><button class="th-wx-sheet-x" data-wx-sheet-close type="button">${iconHtml('fa-xmark')}</button></div>
+      <div class="th-wx-sheet-content">${inner}</div>
+    </div>
+  </div>`;
+}
+
+// MARK_EVENTS
+
+// 暂存最近一条玩家文本（doAiReply 用）
+let _pendingUserText = '';
+// 引用回复：当前正在引用的消息（发送时带上 replyTo*，发完清空）
+let _replyTo: { id: string; name: string; text: string } | null = null;
+
+// 统一委托：所有点击事件绑在常驻根容器上（render 只换 innerHTML，事件不丢）。
+function bindRoot(): void {
+  const root = rootEl();
+  if (!root || (root as any)._wxBound) return;
+  (root as any)._wxBound = true;
+
+  root.addEventListener('click', (e: Event) => { void onClick(e); });
+  root.addEventListener('keydown', (e: Event) => {
+    const ev = e as KeyboardEvent;
+    const t = ev.target as HTMLElement;
+    if (t.classList.contains('th-wx-input') && ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault(); void sendCurrentText();
+    }
+  });
+  root.addEventListener('change', (e: Event) => {
+    const t = e.target as HTMLElement;
+    if (t.classList.contains('th-wx-wb-book')) { void onWbBookChange((t as HTMLSelectElement).value); }
+  });
+}
+
+function fieldVal(sel: string): string {
+  const el = rootEl()?.querySelector(sel) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+  return el ? String(el.value).trim() : '';
+}
+function fieldChecked(sel: string): boolean {
+  const el = rootEl()?.querySelector(sel) as HTMLInputElement | null;
+  return !!el?.checked;
+}
+
+async function onClick(e: Event): Promise<void> {
+  const t = e.target as HTMLElement;
+
+  // 通用导航：data-wx-go="<view>"
+  const goEl = t.closest('[data-wx-go]') as HTMLElement | null;
+  if (goEl) {
+    const v = goEl.getAttribute('data-wx-go') as ViewName;
+    if (v === 'chat') go({ name: 'chat', chatId: goEl.getAttribute('data-wx-cid') || _view.chatId });
+    else go({ name: v });
+    return;
+  }
+  // sheet 关闭：点 X 按钮，或点遮罩空白处（但不含 sheet 主体）
+  if (t.closest('[data-wx-sheet-close]')) {
+    const onMask = (t as HTMLElement).classList?.contains('th-wx-sheet-mask');
+    const onX = !!t.closest('.th-wx-sheet-x');
+    if (onMask || onX) { closeSheet(); return; }
+  }
+
+  // 列表：打开会话
+  const openEl = t.closest('[data-wx-open]') as HTMLElement | null;
+  if (openEl) { go({ name: 'chat', chatId: openEl.getAttribute('data-wx-open') || '' }); return; }
+
+  // 分派到各视图/ sheet 的处理
+  if (await onChatClick(t)) return;
+  if (await onChatSetClick(t)) return;
+  if (await onContactsClick(t)) return;
+  if (await onContactEditClick(t)) return;
+  if (onNewChatClick(t)) return;
+  if (onGroupInfoClick(t)) return;
+  if (await onMomentsClick(t)) return;
+  if (await onSheetClick(t)) return;
+}
+
+// MARK_EVT_CHAT
+
+// 发送当前输入框文本
+async function sendCurrentText(): Promise<void> {
+  if (_view.name !== 'chat' || !_view.chatId) return;
+  if (_busy) { toast('warning', '正在生成，请稍候'); return; }
+  const v = fieldVal('.th-wx-input');
+  if (!v) return;
+  _pendingUserText = v;
+  const reply = _replyTo;
+  appendMessage(_view.chatId, reply
+    ? { senderId: 'me', kind: 'text', content: v, replyToId: reply.id, replyToName: reply.name, replyToText: reply.text }
+    : { senderId: 'me', kind: 'text', content: v });
+  _replyTo = null;
+  render();
+  await doAiReply(_view.chatId);
+}
+
+// 角色主动发消息：不由玩家发话，让对方（单聊角色 / 群里某人）主动起一个话头。
+async function initiateMessage(chatId: string): Promise<void> {
+  if (_busy) { toast('warning', '正在生成，请稍候'); return; }
+  const chat = getChat(chatId); if (!chat) return;
+  const sid = wxSessionId(chatId);
+  _busy = true; render(); toast('info', '对方正在输入…');
+  try {
+    if (chat.kind === 'group') {
+      const replies = await groupReply({
+        sessionId: sid, members: groupMembers(chat),
+        userText: '（没有人说话，群里安静了一会儿。请让群里某些成员主动开个新话头，活跃一下气氛——可以是分享、提问、起哄、艾特某人。）',
+        instruction: fillVars(getPromptText('wechat.group'), { maxSpeakers: chat.settings.maxSpeakers ?? 3, maxBubbles: chat.settings.maxBubbles ?? 3 }),
+        multiSpeaker: chat.settings.multiSpeaker !== false,
+        maxSpeakers: chat.settings.maxSpeakers, maxBubbles: chat.settings.maxBubbles ?? 3,
+        readFloors: chat.settings.readFloors, aiPresetName: chat.settings.aiPresetName,
+      });
+      for (const r of replies) {
+        const senderId = chat.contactIds.find(id => contactName(id) === r.speaker) || chat.contactIds[0] || '';
+        appendMessage(chatId, { senderId, kind: 'text', content: r.content });
+      }
+    } else {
+      const c = getContact(chat.contactIds[0]);
+      const bubbles = await sessionReply({
+        sessionId: sid, persona: fullPersona(c),
+        userText: '（我现在没有说话。请你作为 ta，主动给我发条微信开个话头——想起一件事、分享个心情、问我在干嘛，都行，自然一点。）',
+        instruction: fillVars(getPromptText('wechat.initiate'), { maxBubbles: chat.settings.maxBubbles ?? 3, name: c?.name || '' }),
+        maxBubbles: chat.settings.maxBubbles ?? 3,
+        readFloors: chat.settings.readFloors, aiPresetName: chat.settings.aiPresetName,
+      });
+      for (const b of bubbles) appendMessage(chatId, { senderId: chat.contactIds[0] || '', kind: 'text', content: b });
+    }
+    // 若当前不在该会话（理论上 header 只在会话内可点，这里仍兜底累计未读）
+    if (!(_view.name === 'chat' && _view.chatId === chatId)) incChatUnread(chatId, 1);
+    maybeInject(chatId);
+  } catch (err) {
+    toast('error', '生成失败：' + (err instanceof Error ? err.message : String(err)));
+  } finally {
+    _busy = false; render();
+  }
+}
+
+// 触发一次 AI 回复（单聊/群聊统一入口）。#6 多气泡逐条落库；#9 群聊多人多段。
+async function doAiReply(chatId: string): Promise<void> {
+  if (_busy) { toast('warning', '正在生成，请稍候'); return; }
+  const chat = getChat(chatId); if (!chat) return;
+  const sid = wxSessionId(chatId);
+  _busy = true; render(); toast('info', '对方正在输入…'); // render → 显示「正在输入」动态气泡
+  try {
+    if (chat.kind === 'group') {
+      const forced = fieldVal('.th-wx-speaker');
+      const replies = await groupReply({
+        sessionId: sid, members: groupMembers(chat), userText: _pendingUserText,
+        instruction: fillVars(getPromptText('wechat.group'), { maxSpeakers: chat.settings.maxSpeakers ?? 3, maxBubbles: chat.settings.maxBubbles ?? 3 }),
+        forcedSpeaker: forced || undefined,
+        multiSpeaker: chat.settings.multiSpeaker !== false && !forced,
+        maxSpeakers: chat.settings.maxSpeakers, maxBubbles: chat.settings.maxBubbles ?? 3,
+        readFloors: chat.settings.readFloors, aiPresetName: chat.settings.aiPresetName,
+      });
+      for (const r of replies) {
+        const senderId = chat.contactIds.find(id => contactName(id) === r.speaker) || chat.contactIds[0] || '';
+        appendMessage(chatId, { senderId, kind: 'text', content: r.content });
+      }
+    } else {
+      const c = getContact(chat.contactIds[0]);
+      const bubbles = await sessionReply({
+        sessionId: sid, persona: fullPersona(c), userText: _pendingUserText,
+        instruction: fillVars(getPromptText('wechat.single'), { maxBubbles: chat.settings.maxBubbles ?? 5, name: c?.name || '' }),
+        maxBubbles: chat.settings.maxBubbles ?? 5,
+        readFloors: chat.settings.readFloors, aiPresetName: chat.settings.aiPresetName,
+      });
+      for (const b of bubbles) appendMessage(chatId, { senderId: chat.contactIds[0] || '', kind: 'text', content: b });
+    }
+    maybeInject(chatId);
+  } catch (err) {
+    toast('error', '生成失败：' + (err instanceof Error ? err.message : String(err)));
+  } finally {
+    _busy = false; render();
+  }
+}
+
+// 简单占位符填充（与 world-prompts.fillTemplate 同口径，避免额外导入循环）
+function fillVars(tpl: string, vars: Record<string, string | number | undefined>): string {
+  return tpl.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, k: string) => { const v = vars[k]; return v == null ? '' : String(v); });
+}
+
+// 注入开关开启时，把本次交互末尾摘要喂下次酒馆生成。
+function maybeInject(chatId: string): void {
+  const chat = getChat(chatId); if (!chat || !chat.settings.injectEnabled) return;
+  const msgs = getMessages(chatId).slice(-8).filter(m => !m.recalled);
+  const text = msgs.map(m => `${m.senderId === 'me' ? '我' : contactName(m.senderId)}：${m.kind === 'text' ? m.content : m.kind === 'image' ? '[图片]' : m.kind === 'voice' ? m.content : m.kind === 'desc' ? '（' + m.content + '）' : m.kind === 'system' ? m.content : '[表情]'}`).join('\n');
+  const ok = injectWorldOnce('th_world_wechat_' + chatId, `【微信·${chat.name}】玩家刚在微信里的对话（供参考，勿复述）：\n${text}`);
+  if (ok) toast('info', '本次微信对话已注入下次正文生成');
+}
+
+// chat 视图点击。返回 true=已处理。
+async function onChatClick(t: HTMLElement): Promise<boolean> {
+  if (_view.name !== 'chat' || !_view.chatId) return false;
+  const chatId = _view.chatId;
+  if (t.closest('[data-wx-info]')) {
+    const chat = getChat(chatId);
+    if (chat?.kind === 'group') go({ name: 'groupInfo', chatId });
+    else if (chat) go({ name: 'contactEdit', contactId: chat.contactIds[0] || null });
+    return true;
+  }
+  if (t.closest('[data-wx-memory]')) { openSessionMemory(wxSessionId(chatId)); return true; }
+  if (t.closest('[data-wx-initiate]')) { await initiateMessage(chatId); return true; }
+  if (t.closest('[data-wx-chatset]')) { go({ name: 'chatset', chatId }); return true; }
+  if (t.closest('[data-wx-send]')) { await sendCurrentText(); return true; }
+  if (t.closest('[data-wx-reply-cancel]')) { _replyTo = null; render(); return true; }
+  if (t.closest('[data-wx-sticker]')) { openSheet({ kind: 'sticker', chatId }); return true; }
+  if (t.closest('[data-wx-image]')) { openSheet({ kind: 'compose', chatId, mode: 'image' }); return true; }
+  if (t.closest('[data-wx-desc]')) { openSheet({ kind: 'compose', chatId, mode: 'desc' }); return true; }
+  if (t.closest('[data-wx-voice]')) { openSheet({ kind: 'compose', chatId, mode: 'voice' }); return true; }
+  // 消息操作：单击气泡展开/收起操作条；点操作按钮才执行动作（#反馈1 不再 hover 自动拉伸）
+  const row = t.closest('[data-wx-msg]') as HTMLElement | null;
+  if (row) {
+    const isOp = !!t.closest('[data-wx-reroll],[data-wx-edit],[data-wx-recall],[data-wx-delmsg],[data-wx-reply],[data-wx-pat]');
+    if (isOp) { await handleMsgOp(chatId, t, row.getAttribute('data-wx-msg') || ''); }
+    else { toggleMsgActive(row); }
+    return true;
+  }
+  return false;
+}
+
+// 单击气泡：切换该条操作条展开态（直接改 DOM，避免整段重渲染/滚动跳动）；同时收起其它条
+function toggleMsgActive(row: HTMLElement): void {
+  const on = row.classList.contains('th-wx-msg-active');
+  const root = rootEl();
+  if (root) root.querySelectorAll('.th-wx-bubble-row.th-wx-msg-active').forEach(el => el.classList.remove('th-wx-msg-active'));
+  if (!on) row.classList.add('th-wx-msg-active');
+}
+
+// 单条消息操作
+async function handleMsgOp(chatId: string, t: HTMLElement, msgId: string): Promise<void> {
+  const msgs = getMessages(chatId);
+  const m = msgs.find(x => x.id === msgId); if (!m) return;
+  if (t.closest('[data-wx-edit]')) {
+    const next = ask('编辑内容：', m.content);
+    if (next != null && next.trim()) { updateMessage(chatId, msgId, { content: next.trim() }); render(); }
+    return;
+  }
+  if (t.closest('[data-wx-recall]')) { updateMessage(chatId, msgId, { recalled: true }); render(); return; }
+  if (t.closest('[data-wx-delmsg]')) { if (confirmBox('删除这条消息？')) { deleteMessage(chatId, msgId); render(); } return; }
+  if (t.closest('[data-wx-reply]')) {
+    const who = m.senderId === 'me' ? '我' : contactName(m.senderId);
+    const preview = m.kind === 'text' ? m.content : m.kind === 'image' ? '[图片]' : m.kind === 'voice' ? '[语音]' : m.kind === 'desc' ? '[描述]' : '[消息]';
+    _replyTo = { id: msgId, name: who, text: preview };
+    render();
+    try { (rootEl()?.querySelector('.th-wx-input') as HTMLElement | null)?.focus(); } catch (e) { void e; }
+    return;
+  }
+  if (t.closest('[data-wx-pat]')) {
+    // 拍一拍：插一条系统消息（玩家拍了角色）
+    const who = contactName(m.senderId);
+    appendMessage(chatId, { senderId: 'me', kind: 'system', content: `我 拍了拍 ${who}` });
+    render();
+    return;
+  }
+  if (t.closest('[data-wx-reroll]')) {
+    if (_busy) { toast('warning', '正在生成，请稍候'); return; }
+    const idx = msgs.findIndex(x => x.id === msgId);
+    const prevUser = [...msgs.slice(0, idx)].reverse().find(x => x.senderId === 'me' && x.kind === 'text');
+    if (!prevUser) { toast('warning', '没有可重新生成的上文'); return; }
+    // 删除这条之后（含本条）的连续 AI 气泡，再重生成
+    deleteMessage(chatId, msgId);
+    _pendingUserText = prevUser.content;
+    render();
+    await doAiReply(chatId);
+    return;
+  }
+}
+
+// MARK_EVT_REST
+
+// ---- 会话设置 ----
+async function onChatSetClick(t: HTMLElement): Promise<boolean> {
+  if (_view.name !== 'chatset' || !_view.chatId) return false;
+  const chatId = _view.chatId;
+  const promptBtn = t.closest('[data-wx-prompt]') as HTMLElement | null;
+  if (promptBtn) { openSheet({ kind: 'prompt', id: promptBtn.getAttribute('data-wx-prompt') || '' }); return true; }
+  if (t.closest('[data-wx-set-pin]')) { toggleChatPin(chatId); toast('success', '已切换置顶'); render(); return true; }
+  if (t.closest('[data-wx-set-save]')) {
+    const chat = getChat(chatId);
+    const floorsRaw = Number(fieldVal('.th-wx-set-floors'));
+    const readFloors = Number.isFinite(floorsRaw) && floorsRaw >= 0 ? Math.floor(floorsRaw) : 0;
+    const bubblesRaw = Number(fieldVal('.th-wx-set-bubbles'));
+    const maxBubbles = Number.isFinite(bubblesRaw) ? Math.max(1, Math.min(8, Math.floor(bubblesRaw))) : 5;
+    const patch: any = {
+      readFloors, maxBubbles,
+      injectEnabled: fieldChecked('.th-wx-set-inject'),
+      aiPresetName: fieldVal('.th-wx-set-preset') || undefined,
+    };
+    if (chat?.kind === 'group') {
+      patch.groupAutoSpeaker = fieldChecked('.th-wx-set-autospk');
+      patch.multiSpeaker = fieldChecked('.th-wx-set-multi');
+      const ms = Number(fieldVal('.th-wx-set-maxspk'));
+      patch.maxSpeakers = Number.isFinite(ms) ? Math.max(1, Math.min(6, Math.floor(ms))) : 3;
+    }
+    updateChatSettings(chatId, patch);
+    toast('success', '已保存会话设置');
+    go({ name: 'chat', chatId });
+    return true;
+  }
+  if (t.closest('[data-wx-set-del]')) {
+    if (confirmBox('删除整个会话（含消息）？记忆需在记忆中心单独删除。')) { deleteChat(chatId); go({ name: 'list' }); }
+    return true;
+  }
+  return false;
+}
+
+// ---- 通讯录 ----
+async function onContactsClick(t: HTMLElement): Promise<boolean> {
+  if (_view.name !== 'contacts') return false;
+  if (t.closest('[data-wx-ct-import]')) { showPersonaImport(); return true; }
+  if (t.closest('[data-wx-ct-new]')) { _ceDraft = null; go({ name: 'contactEdit', contactId: null }); return true; }
+  const row = t.closest('[data-wx-ct]') as HTMLElement | null;
+  if (!row) return false;
+  const id = row.getAttribute('data-wx-ct') || '';
+  if (t.closest('[data-wx-ct-edit]')) { _ceDraft = null; go({ name: 'contactEdit', contactId: id }); return true; }
+  if (t.closest('[data-wx-ct-chat]')) {
+    const c = getContact(id); if (!c) return true;
+    // 复用已存在的单聊，否则新建
+    const exist = listChats().find(ch => ch.kind === 'single' && ch.contactIds[0] === id);
+    const chat = exist || createChat({ kind: 'single', name: c.name, contactIds: [id] });
+    go({ name: 'chat', chatId: chat.id });
+    return true;
+  }
+  if (t.closest('[data-wx-ct-del]')) {
+    if (confirmBox('删除该联系人？（已建会话不受影响）')) { deleteContact(id); render(); }
+    return true;
+  }
+  return false;
+}
+
+// 从人格导入（弹序号选择，简单可靠）
+function showPersonaImport(): void {
+  const personas = getPersonaList();
+  if (!personas.length) { toast('warning', '暂无人格'); return; }
+  const menu = personas.map((p, i) => `${i + 1}. ${p.name}${p.builtin ? '（内置）' : ''}`).join('\n');
+  const v = ask(`选择要导入的人格（输入序号）：\n${menu}`, '1');
+  if (v == null) return;
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n < 1 || n > personas.length) { toast('warning', '序号无效'); return; }
+  const p = personas[n - 1];
+  importPersonaContact({ id: p.id, name: p.name, persona: p.persona });
+  toast('success', `已导入 ${p.name}`);
+  render();
+}
+
+// ---- 联系人编辑 ----
+function readCeForm(): Partial<WorldContact> {
+  return {
+    name: fieldVal('.th-wx-ce-name'),
+    gender: fieldVal('.th-wx-ce-gender') || '女',
+    avatar: fieldVal('.th-wx-ce-avatar'),
+    appearance: (rootEl()?.querySelector('.th-wx-ce-appearance') as HTMLTextAreaElement | null)?.value || '',
+    persona: (rootEl()?.querySelector('.th-wx-ce-persona') as HTMLTextAreaElement | null)?.value || '',
+    imageTag: fieldVal('.th-wx-ce-imgtag'),
+    note: fieldVal('.th-wx-ce-note'),
+  };
+}
+async function onContactEditClick(t: HTMLElement): Promise<boolean> {
+  if (_view.name !== 'contactEdit') return false;
+  const id = _view.contactId ?? null;
+  if (t.closest('[data-wx-ce-wb]')) { _ceDraft = readCeForm(); openSheet({ kind: 'wbPick' }); return true; }
+  if (t.closest('[data-wx-ce-genavatar]')) {
+    if (_busy) return true;
+    const f = readCeForm();
+    if (!isImageBackendReady()) { toast('warning', '未配置图片后端'); return true; }
+    _busy = true; toast('info', '正在生成头像…');
+    try {
+      const r = await tryGenImage(f.imageTag || f.appearance || f.name || 'portrait, avatar');
+      if (r) { const inp = rootEl()?.querySelector('.th-wx-ce-avatar') as HTMLInputElement | null; if (inp) inp.value = r.url; toast('success', '头像已生成，记得保存'); }
+      else toast('warning', '出图失败');
+    } catch (err) { void err; toast('warning', '出图失败'); }
+    finally { _busy = false; }
+    return true;
+  }
+  if (t.closest('[data-wx-ce-save]')) {
+    const f = readCeForm();
+    if (!f.name) { toast('warning', '请填昵称'); return true; }
+    const existing = id ? getContact(id) : null;
+    upsertContact({
+      id: id || undefined, source: existing?.source || 'custom', sourceRef: existing?.sourceRef,
+      name: f.name, gender: f.gender, avatar: f.avatar || undefined,
+      appearance: f.appearance || undefined, persona: f.persona,
+      imageTag: f.imageTag || undefined, note: f.note || undefined,
+    });
+    _ceDraft = null;
+    toast('success', '已保存联系人');
+    go({ name: 'contacts' });
+    return true;
+  }
+  return false;
+}
+
+// ---- 发起会话 ----
+function onNewChatClick(t: HTMLElement): boolean {
+  if (_view.name !== 'newChat') return false;
+  if (t.closest('[data-wx-create]')) {
+    const root = rootEl(); if (!root) return true;
+    const picks = [...root.querySelectorAll('.th-wx-pick:checked')].map(el => (el as HTMLInputElement).value);
+    if (!picks.length) { toast('warning', '请至少选择一个联系人'); return true; }
+    if (picks.length === 1) {
+      const c = getContact(picks[0]); if (!c) return true;
+      const chat = createChat({ kind: 'single', name: c.name, contactIds: picks });
+      go({ name: 'chat', chatId: chat.id });
+    } else {
+      const nameInput = fieldVal('.th-wx-group-name');
+      const auto = picks.map(id => getContact(id)?.name || '').filter(Boolean).slice(0, 3).join('、');
+      const chat = createChat({ kind: 'group', name: nameInput || `${auto}${picks.length > 3 ? ' 等' : ''}的群聊`, contactIds: picks });
+      go({ name: 'chat', chatId: chat.id });
+    }
+    return true;
+  }
+  return false;
+}
+
+// ---- 群资料（#3）----
+function onGroupInfoClick(t: HTMLElement): boolean {
+  if (_view.name !== 'groupInfo' || !_view.chatId) return false;
+  const chatId = _view.chatId;
+  if (t.closest('[data-wx-gi-save]')) {
+    const name = fieldVal('.th-wx-gi-name');
+    if (name) { updateChat(chatId, { name }); toast('success', '已保存群名'); render(); }
+    return true;
+  }
+  if (t.closest('[data-wx-gm-add]')) {
+    const sel = fieldVal('.th-wx-gm-add-sel');
+    const chat = getChat(chatId);
+    if (sel && chat && !chat.contactIds.includes(sel)) {
+      updateChat(chatId, { contactIds: [...chat.contactIds, sel] }); render();
+    }
+    return true;
+  }
+  const gm = t.closest('[data-wx-gm]') as HTMLElement | null;
+  if (gm && t.closest('[data-wx-gm-del]')) {
+    const rid = gm.getAttribute('data-wx-gm') || '';
+    const chat = getChat(chatId);
+    if (chat) {
+      if (chat.contactIds.length <= 2) { toast('warning', '群聊至少保留 2 人'); return true; }
+      updateChat(chatId, { contactIds: chat.contactIds.filter(x => x !== rid) }); render();
+    }
+    return true;
+  }
+  return false;
+}
+
+// MARK_EVT_MOMENTS
+
+// 选一个联系人（序号 prompt）
+function pickContactId(msg = '选择角色（输入序号）：'): string | null {
+  const cs = getContacts();
+  if (!cs.length) { toast('warning', '通讯录还没有联系人'); return null; }
+  const menu = cs.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+  const v = ask(`${msg}\n${menu}`, '1');
+  if (v == null) return null;
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n < 1 || n > cs.length) { toast('warning', '序号无效'); return null; }
+  return cs[n - 1].id;
+}
+
+async function onMomentsClick(t: HTMLElement): Promise<boolean> {
+  if (_view.name !== 'moments') return false;
+  if (t.closest('[data-wx-mo-post]')) {
+    const text = ask('发什么动态？');
+    if (text != null && text.trim()) { addMoment({ authorId: 'me', text: text.trim() }); render(); }
+    return true;
+  }
+  if (t.closest('[data-wx-mo-aipost]')) {
+    if (_busy) { toast('warning', '正在生成，请稍候'); return true; }
+    const cid = pickContactId('哪位角色发动态？（输入序号）'); if (!cid) return true;
+    const c = getContact(cid); if (!c) return true;
+    _busy = true; toast('info', `${c.name} 正在发动态…`);
+    try {
+      const text = await chatGenerate({
+        system: fillVars(getPromptText('wechat.moment_post'), { name: c.name }) + '\n' + fullPersona(c),
+        user: '发一条此刻心情的朋友圈。',
+      });
+      if (text.trim()) addMoment({ authorId: cid, text: text.trim().replace(/^["「]|["」]$/g, '') });
+      toast('success', '已发布');
+    } catch (err) { toast('error', '生成失败：' + (err instanceof Error ? err.message : String(err))); }
+    finally { _busy = false; render(); }
+    return true;
+  }
+  const moEl = t.closest('[data-wx-mo]') as HTMLElement | null;
+  if (!moEl) return false;
+  const moId = moEl.getAttribute('data-wx-mo') || '';
+  if (t.closest('[data-wx-mo-like]')) { toggleMomentLike(moId, 'me'); render(); return true; }
+  if (t.closest('[data-wx-mo-del]')) { if (confirmBox('删除这条动态？')) { deleteMoment(moId); render(); } return true; }
+  if (t.closest('[data-wx-mo-cm]')) {
+    const text = ask('评论：');
+    if (text != null && text.trim()) { addMomentComment(moId, 'me', text.trim()); render(); }
+    return true;
+  }
+  if (t.closest('[data-wx-mo-aicm]')) {
+    if (_busy) { toast('warning', '正在生成，请稍候'); return true; }
+    await aiCommentMoment(moId);
+    return true;
+  }
+  return false;
+}
+
+// #9 朋友圈一次让多位角色评论
+async function aiCommentMoment(moId: string): Promise<void> {
+  const mo = listMoments().find(x => x.id === moId); if (!mo) return;
+  const all = getContacts();
+  if (!all.length) { toast('warning', '通讯录还没有联系人'); return; }
+  // 简单策略：最多取前 3 位联系人参与评论（玩家可在通讯录管理谁在列表里）
+  const participants = all.slice(0, Math.min(3, all.length));
+  _busy = true; toast('info', '角色们正在评论…');
+  try {
+    const roster = participants.map(c => `【${c.name}】${(c.persona || '').slice(0, 120)}`).join('\n');
+    const raw = await chatGenerate({
+      system: fillVars(getPromptText('wechat.moment_comment'), { roster, moment: `${contactName(mo.authorId)}：${mo.text}` }),
+      user: '请生成评论。',
+      jsonSchema: {
+        type: 'object',
+        properties: { comments: { type: 'array', items: { type: 'object', properties: { speaker: { type: 'string' }, text: { type: 'string' } }, required: ['speaker', 'text'] } } },
+        required: ['comments'],
+      },
+    });
+    const obj = parseLooseJson(raw);
+    const list = obj && Array.isArray(obj.comments) ? obj.comments : null;
+    let count = 0;
+    if (list) {
+      for (const cm of list) {
+        const c = participants.find(p => p.name === String(cm?.speaker).trim());
+        const text = String(cm?.text ?? '').trim();
+        if (c && text) { addMomentComment(moId, c.id, text); count++; }
+      }
+    }
+    if (!count) { // 兜底：整段作第一位评论
+      addMomentComment(moId, participants[0].id, raw.slice(0, 60));
+    }
+    toast('success', '已评论');
+  } catch (err) { toast('error', '生成失败：' + (err instanceof Error ? err.message : String(err))); }
+  finally { _busy = false; render(); }
+}
+
+// MARK_EVT_SHEET
+
+async function onSheetClick(t: HTMLElement): Promise<boolean> {
+  if (!_sheet) return false;
+  // ---- 表情 ----
+  if (_sheet.kind === 'sticker') {
+    const chatId = _sheet.chatId;
+    const delBtn = t.closest('[data-wx-st-del]') as HTMLElement | null;
+    if (delBtn) { deleteSticker(delBtn.getAttribute('data-wx-st-del') || ''); render(); return true; }
+    if (t.closest('[data-wx-st-add]')) {
+      const name = fieldVal('.th-wx-st-name'); const url = fieldVal('.th-wx-st-url');
+      if (!name && !url) { toast('warning', '填表情文字或图片 URL'); return true; }
+      addSticker(name || '表情', url || undefined); render(); return true;
+    }
+    const cell = t.closest('[data-wx-st]') as HTMLElement | null;
+    if (cell) {
+      const s = getStickers().find(x => x.id === cell.getAttribute('data-wx-st'));
+      if (s) appendMessage(chatId, { senderId: 'me', kind: 'sticker', content: s.name, imageUrl: s.url });
+      closeSheet();
+      return true;
+    }
+    return false;
+  }
+  // ---- 发图 / 发描述 ----
+  if (_sheet.kind === 'compose') {
+    if (t.closest('[data-wx-compose-send]')) {
+      const sheet = _sheet; const chatId = sheet.chatId;
+      const text = fieldVal('.th-wx-compose-input');
+      if (!text) { toast('warning', '写点内容'); return true; }
+      if (sheet.mode === 'desc') {
+        appendMessage(chatId, { senderId: 'me', kind: 'desc', content: text });
+        closeSheet();
+      } else if (sheet.mode === 'voice') {
+        // 语音条：当作一条真实消息发出，并触发对方回复
+        _pendingUserText = text;
+        appendMessage(chatId, { senderId: 'me', kind: 'voice', content: text, voiceSec: Math.max(1, Math.min(60, Math.round(text.length / 3))) });
+        closeSheet();
+        await doAiReply(chatId);
+      } else {
+        // 图片：占位入库 → 出图回填；未配置后端则保持文字描述卡（#7）
+        const placed = appendMessage(chatId, { senderId: 'me', kind: 'image', content: text });
+        closeSheet();
+        if (isImageBackendReady()) {
+          toast('info', '正在生成图片…');
+          try {
+            const r = await tryGenImage(text);
+            if (r) { updateMessage(chatId, placed.id, { imageUrl: r.url }); toast('success', '图片已生成'); render(); }
+            else toast('warning', '出图失败，保留文字描述卡');
+          } catch (e) { void e; toast('warning', '出图失败，保留文字描述卡'); }
+        } else {
+          toast('info', '未配置本地生图，已用文字描述卡呈现');
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+  // ---- 世界书条目导入（#10）----
+  if (_sheet.kind === 'wbPick') {
+    const ent = t.closest('[data-wx-wb-ent]') as HTMLElement | null;
+    if (ent) {
+      const name = ent.getAttribute('data-wb-name') || '';
+      const content = ent.getAttribute('data-wb-content') || '';
+      // 合并进当前编辑草稿（保留玩家已填昵称）
+      _ceDraft = { ...(_ceDraft || {}), persona: content, name: (_ceDraft?.name || name) };
+      _sheet = null;
+      toast('success', `已载入条目「${name}」到角色设定`);
+      render();
+      return true;
+    }
+    return false;
+  }
+  // ---- 提示词编辑（#8）----
+  if (_sheet.kind === 'prompt') {
+    const id = _sheet.id;
+    if (t.closest('[data-wx-prompt-save]')) {
+      const txt = (rootEl()?.querySelector('.th-wx-prompt-text') as HTMLTextAreaElement | null)?.value ?? '';
+      setPromptOverride(id, txt); toast('success', '已保存提示词'); closeSheet(); return true;
+    }
+    if (t.closest('[data-wx-prompt-reset]')) { resetPrompt(id); toast('success', '已恢复默认'); render(); return true; }
+    return false;
+  }
+  return false;
+}
+
+// 世界书选书 → 列条目
+async function onWbBookChange(book: string): Promise<void> {
+  const box = rootEl()?.querySelector('.th-wx-wb-entries') as HTMLElement | null;
+  if (!box) return;
+  if (!book) { box.innerHTML = '<div class="th-wx-empty-sub">先选一本世界书</div>'; return; }
+  box.innerHTML = '<div class="th-wx-empty-sub">加载中…</div>';
+  const entries = await listWorldbookEntries(book);
+  if (!_sheet || _sheet.kind !== 'wbPick') return; // sheet 已关
+  if (!entries.length) { box.innerHTML = '<div class="th-wx-empty-sub">这本世界书没有条目</div>'; return; }
+  box.innerHTML = entries.map(e => `
+    <button class="th-wx-wb-ent" type="button"
+      data-wx-wb-ent data-wb-book="${esc(book)}" data-wb-uid="${esc(String(e.uid))}"
+      data-wb-name="${esc(e.name)}" data-wb-content="${esc(e.content)}">
+      <span class="th-wx-wb-ent-name">${esc(e.name)}${e.enabled ? '' : ' <small>(禁用)</small>'}</span>
+      <span class="th-wx-wb-ent-preview">${esc(e.content.slice(0, 80))}</span>
+    </button>`).join('');
+}
+
+// MARK_REGISTER
+
+// ==================== 公开入口 + 注册 ====================
+// 单 modal SPA：openModal2 只调一次（reset 清栈 + revive 让子级 modal 如记忆中心关闭后恢复本 app）。
+function openApp(): void {
+  openModal2(`${iconHtml('fa-comment-dots')} 微信`, `<div class="th-wx th-phone"><div class="th-phone-island"><span class="th-phone-cam"></span></div><div id="${RID}" class="th-phone-screen"></div></div>`, {
+    maxWidth: WX_MODAL_MAXW, reset: true, revive: openApp,
+  });
+  bindRoot();
+  render();
+}
+
+export function openWechat(): void {
+  _view = { name: 'list' }; _sheet = null; _ceDraft = null;
+  openApp();
+}
+
+registerWorldApp({
+  id: 'wechat', name: '微信', icon: 'fa-comment-dots', accent: 'linear-gradient(135deg,#07c160,#10b981)', order: 10,
+  open: openWechat,
+});
+
+// 调试挂载
+try {
+  const w = (typeof window !== 'undefined' ? window : globalThis) as any;
+  w.__th_world_wechat__ = { openWechat };
+} catch (e) { void e; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

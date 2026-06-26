@@ -1,0 +1,7 @@
+```
+<body>
+<script>
+$('body').load('http://localhost:5500/dist/此间天地前端/index.html')
+</script>
+</body>
+```

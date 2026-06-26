@@ -1,0 +1,212 @@
+// 物品/技能网格 + 背包/技能弹窗（解耦阶段 1h）。
+// 从 status-bar-init.ts 纯移动；行为保持一致。
+// currentData/isEditMode 通过主文件 getter 懒读，避免 whole-reassigned 状态引用断开。
+// ================================================================
+import { esc, escAttr, qs, qsa, editableInput, editableTextarea } from '../lib/dom-utils';
+import { safeTriggerSlash } from '../lib/tavern-api';
+import { collectStatDataChange } from '../lib/variable-review';
+import {
+  getUser,
+  getUN,
+  getUserKey,
+  getNPCInfo,
+  openModal,
+  closeModal,
+  tavernMacro,
+  saveData,
+  setUser,
+  renderCurrent,
+  getCurrentStatusData,
+  getStatusEditMode,
+} from '../status-bar-init';
+
+// --- User 背包 ---
+export function openUserBag(data:Record<string,any>) {
+  const u=getUser(data); const uname=getUN(data); const ukey=getUserKey(data);
+  const items=_.get(u,'拥有物品',{})||{}; const entries=Object.entries(items);
+  const basePath=ukey+'.拥有物品';
+  const h=renderItemGrid(entries,basePath,uname);
+  openModal('<i class="fa-solid fa-box-open"></i> 背包',h);
+  bindGridItemClicks(uname, entries, basePath, 'user');
+}
+
+// --- NPC 背包 ---
+export function openNPCBag(npcName:string) {
+  const currentData = getCurrentStatusData();
+  const info=getNPCInfo(currentData,npcName); if(!info) return;
+  const items=_.get(info,'拥有物品',{})||{}; const entries=Object.entries(items);
+  const basePath=`NPC.${npcName}.拥有物品`;
+  const h=renderItemGrid(entries,basePath,npcName);
+  openModal(`<i class="fa-solid fa-box-open"></i> `+esc(npcName)+' · 背包',h);
+  bindGridItemClicks(npcName, entries, basePath, 'npc');
+}
+
+// --- User 技能 ---
+export function openUserSkill(data:Record<string,any>) {
+  const u=getUser(data); const uname=getUN(data); const ukey=getUserKey(data);
+  const skills=_.get(u,'拥有技能',{})||{}; const entries=Object.entries(skills);
+  const basePath=ukey+'.拥有技能';
+  const h=renderSkillGrid(entries,basePath,uname);
+  openModal('<i class="fa-solid fa-scroll"></i> 技能',h);
+  bindGridSkillClicks(uname, entries, basePath, 'user');
+}
+
+// --- NPC 技能 ---
+export function openNPCSkill(npcName:string) {
+  const currentData = getCurrentStatusData();
+  const info=getNPCInfo(currentData,npcName); if(!info) return;
+  const skills=_.get(info,'拥有技能',{})||{}; const entries=Object.entries(skills);
+  const basePath=`NPC.${npcName}.拥有技能`;
+  const h=renderSkillGrid(entries,basePath,npcName);
+  openModal(`<i class="fa-solid fa-scroll"></i> `+esc(npcName)+' · 技能',h);
+  bindGridSkillClicks(npcName, entries, basePath, 'npc');
+}
+
+// --- 网格渲染 ---
+function renderItemGrid(entries:[string,any][], basePath:string, ownerName:string): string {
+  let h='';
+  if(!entries.length) h+='<div class="th-empty th-grid-empty"><i class="fa-solid fa-box-open"></i> 空空如也~</div>';
+  h+='<div class="th-block-grid">';
+  h+=entries.map(([n,it]:[string,any])=>{
+    const count=it?.['数量']??1;
+    const ed=escAttr(n);
+    return `<div class="th-block th-block-item th-grid-item-click" data-gname="${ed}" data-gpath="${escAttr(basePath)}" data-owner="${escAttr(ownerName)}" data-gtype="item"><i class="fa-solid fa-gem"></i> ${esc(n)}<span class="th-tag-badge">${count}</span></div>`;
+  }).join('');
+  h+=`<div class="th-block th-block-add" data-add-trigger="item" data-add-base="${escAttr(basePath)}" data-add-owner="${escAttr(ownerName)}"><i class="fa-solid fa-plus"></i> 添加物品</div>`;
+  h+='</div>';
+  h+=`<div class="th-grid-detail" id="th-grid-detail" style="display:none"></div>`;
+  return h;
+}
+
+function renderSkillGrid(entries:[string,any][], basePath:string, ownerName:string): string {
+  let h='';
+  if(!entries.length) h+='<div class="th-empty th-grid-empty"><i class="fa-solid fa-scroll"></i> 尚未习得~</div>';
+  h+='<div class="th-block-grid">';
+  h+=entries.map(([n,sk]:[string,any])=>{
+    const lv=sk?.['等级']??1;
+    const ed=escAttr(n);
+    return `<div class="th-block th-block-skill th-grid-item-click" data-gname="${ed}" data-gpath="${escAttr(basePath)}" data-owner="${escAttr(ownerName)}" data-gtype="skill"><i class="fa-solid fa-scroll"></i> ${esc(n)}<span class="th-tag-badge" style="background:var(--lav);font-size:9px">Lv${lv}</span></div>`;
+  }).join('');
+  h+=`<div class="th-block th-block-add" data-add-trigger="skill" data-add-base="${escAttr(basePath)}" data-add-owner="${escAttr(ownerName)}"><i class="fa-solid fa-plus"></i> 添加技能</div>`;
+  h+='</div>';
+  h+=`<div class="th-grid-detail" id="th-grid-detail" style="display:none"></div>`;
+  return h;
+}
+
+// --- 点击方块→显示详情 ---
+function bindGridItemClicks(ownerName:string, entries:[string,any][], basePath:string, ownerType:string) {
+  setTimeout(()=>{
+    qsa('.th-grid-item-click').forEach(el=>el.addEventListener('click',function(this:HTMLElement,e:Event){
+      e.stopPropagation();
+      const n=this.getAttribute('data-gname')||'';
+      const entry=entries.find(([k])=>k===n);
+      if(!entry) return;
+      const it=entry[1] as any;
+      const path=basePath+'.'+n;
+      showItemDetail(n,it,path,ownerName,ownerType);
+    }));
+  },40);
+}
+
+function bindGridSkillClicks(ownerName:string, entries:[string,any][], basePath:string, ownerType:string) {
+  setTimeout(()=>{
+    qsa('.th-grid-item-click').forEach(el=>el.addEventListener('click',function(this:HTMLElement,e:Event){
+      e.stopPropagation();
+      const n=this.getAttribute('data-gname')||'';
+      const entry=entries.find(([k])=>k===n);
+      if(!entry) return;
+      const sk=entry[1] as any;
+      const path=basePath+'.'+n;
+      showSkillDetail(n,sk,path,ownerName,ownerType);
+    }));
+  },40);
+}
+
+function showItemDetail(name:string, it:any, editPath:string, ownerName:string, ownerType:string) {
+  const detailEl=qs('#th-grid-detail'); if(!detailEl) return;
+  const gridEl=detailEl.previousElementSibling as HTMLElement;
+  if(gridEl) gridEl.style.display='none';
+  let h='';
+  if(getStatusEditMode()){
+    h+=`<div class="th-modal-section"><div class="th-modal-label">名称</div>${editableInput(name,editPath+'.名称')}</div>`;
+    h+=`<div class="th-modal-section"><div class="th-modal-label">数量</div>${editableInput(`${it?.['数量']??1}`,editPath+'.数量','number')}</div>`;
+    h+=`<div class="th-modal-section"><div class="th-modal-label">简介</div>${editableTextarea(it?.['简介']||'',editPath+'.简介')}</div>`;
+    h+=`<div class="th-modal-section"><div class="th-modal-label">效果</div>${editableTextarea(it?.['效果']||'',editPath+'.效果')}</div>`;
+    h+=`<div class="th-modal-section"><div class="th-modal-label">评价</div>${editableTextarea(it?.['评价']||'',editPath+'.评价')}</div>`;
+  } else {
+    h+=`<div class="th-item-row"><div class="th-item-name">${esc(name)} <span class="th-item-count">x${it?.['数量']??1}</span></div>`;
+    if(it?.['简介']) h+=`<div class="th-item-desc">${esc(it['简介'])}</div>`;
+    if(it?.['效果']) h+=`<div class="th-item-effect"><i class="fa-solid fa-wand-magic-sparkles"></i> ${esc(it['效果'])}</div>`;
+    if(it?.['评价']) h+=`<div class="th-item-comment">${esc(it['评价'])}</div>`;
+  }
+  h+=`<div class="th-item-actions">`;
+  h+=`<button class="th-btn-sm th-btn-use th-btn-use-item" data-owner="${escAttr(ownerName)}" data-item="${escAttr(name)}"><i class="fa-solid fa-wand-magic-sparkles"></i> 使用</button>`;
+  h+=`<button class="th-btn-sm th-btn-discard th-btn-discard-item" data-owner="${escAttr(ownerName)}" data-item="${escAttr(name)}" data-owner-type="${ownerType}"><i class="fa-solid fa-trash"></i> 丢弃</button>`;
+  h+=`<button class="th-btn-sm th-btn-back-grid" style="background:var(--bg3);color:var(--tx2);border:1px solid var(--dv);margin-left:auto"><i class="fa-solid fa-arrow-left"></i> 返回</button>`;
+  h+=`</div>`;
+  detailEl.innerHTML=h; detailEl.style.display='block';
+
+  // 使用按钮
+  qs('.th-btn-use-item')?.addEventListener('click',function(this:HTMLElement){
+    const on=this.getAttribute('data-owner')||''; const it=this.getAttribute('data-item')||'';
+    try{safeTriggerSlash('/setinput '+tavernMacro('input')+' <'+on+'使用了'+it+'>')}catch(e){ void e; } closeModal();
+  });
+  // 丢弃按钮
+  qs('.th-btn-discard-item')?.addEventListener('click',function(this:HTMLElement){
+    const on=this.getAttribute('data-owner')||''; const it=this.getAttribute('data-item')||'';
+    const ot=this.getAttribute('data-owner-type')||'npc';
+    const currentData = getCurrentStatusData();
+    if(!currentData) return;
+    if(ot==='npc'){
+      const nps=_.get(currentData,'NPC',{})||{}; const its=_.get(nps[on],'拥有物品',{})||{}; delete its[it]; _.set(nps[on],'拥有物品',its); _.set(currentData,'NPC',nps);
+      saveData(currentData);
+      // PROGRESS §7 Step B：本地编辑统一采集
+      try { collectStatDataChange(currentData, { snapshot: true, label: 'discardItem:npc' }); } catch(e) { void e; }
+      renderCurrent(); openNPCBag(on);
+    } else {
+      const uu=getUser(currentData); const its=_.get(uu,'拥有物品',{})||{}; delete its[it]; _.set(uu,'拥有物品',its); setUser(currentData,uu);
+      saveData(currentData);
+      // PROGRESS §7 Step B：本地编辑统一采集
+      try { collectStatDataChange(currentData, { snapshot: true, label: 'discardItem:user' }); } catch(e) { void e; }
+      renderCurrent(); openUserBag(currentData);
+    }
+  });
+  // 返回按钮
+  qs('.th-btn-back-grid')?.addEventListener('click',()=>{
+    detailEl.style.display='none'; detailEl.innerHTML='';
+    if(gridEl) gridEl.style.display='';
+  });
+}
+
+function showSkillDetail(name:string, sk:any, editPath:string, ownerName:string, _ownerType:string) {
+  const detailEl=qs('#th-grid-detail'); if(!detailEl) return;
+  const gridEl=detailEl.previousElementSibling as HTMLElement;
+  if(gridEl) gridEl.style.display='none';
+  let h='';
+  if(getStatusEditMode()){
+    h+=`<div class="th-modal-section"><div class="th-modal-label">名称</div>${editableInput(name,editPath+'.名称')}</div>`;
+    h+=`<div class="th-modal-section"><div class="th-modal-label">等级</div>${editableInput(`${sk?.['等级']??1}`,editPath+'.等级','number')}</div>`;
+    h+=`<div class="th-modal-section"><div class="th-modal-label">简介</div>${editableTextarea(sk?.['简介']||'',editPath+'.简介')}</div>`;
+    h+=`<div class="th-modal-section"><div class="th-modal-label">效果</div>${editableTextarea(sk?.['效果']||'',editPath+'.效果')}</div>`;
+    h+=`<div class="th-modal-section"><div class="th-modal-label">评价</div>${editableTextarea(sk?.['评价']||'',editPath+'.评价')}</div>`;
+  } else {
+    h+=`<div class="th-skill-row"><div class="th-skill-name">${esc(name)} <span style="font-size:13px;color:var(--lav);font-weight:700">Lv.${sk?.['等级']??1}</span></div>`;
+    if(sk?.['简介']) h+=`<div class="th-skill-desc">${esc(sk['简介'])}</div>`;
+    if(sk?.['效果']) h+=`<div class="th-skill-effect"><i class="fa-solid fa-wand-magic-sparkles"></i> ${esc(sk['效果'])}</div>`;
+    if(sk?.['评价']) h+=`<div class="th-skill-comment">${esc(sk['评价'])}</div>`;
+  }
+  h+=`<div class="th-item-actions">`;
+  h+=`<button class="th-btn-sm th-btn-use th-btn-use-skill" data-owner="${escAttr(ownerName)}" data-skill="${escAttr(name)}"><i class="fa-solid fa-wand-magic-sparkles"></i> 使用</button>`;
+  h+=`<button class="th-btn-sm th-btn-back-grid" style="background:var(--bg3);color:var(--tx2);border:1px solid var(--dv);margin-left:auto"><i class="fa-solid fa-arrow-left"></i> 返回</button>`;
+  h+=`</div>`;
+  detailEl.innerHTML=h; detailEl.style.display='block';
+
+  qs('.th-btn-use-skill')?.addEventListener('click',function(this:HTMLElement){
+    const on=this.getAttribute('data-owner')||''; const sk=this.getAttribute('data-skill')||'';
+    try{safeTriggerSlash('/setinput '+tavernMacro('input')+' <'+on+'使用了'+sk+'>')}catch(e){ void e; } closeModal();
+  });
+  qs('.th-btn-back-grid')?.addEventListener('click',()=>{
+    detailEl.style.display='none'; detailEl.innerHTML='';
+    if(gridEl) gridEl.style.display='';
+  });
+}

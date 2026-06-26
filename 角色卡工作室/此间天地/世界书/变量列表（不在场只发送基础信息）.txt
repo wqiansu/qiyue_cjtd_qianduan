@@ -1,0 +1,104 @@
+---
+<status_current_variable>
+<%
+  const data = getvar('stat') || {};
+  const SKIP_KEYS = ['_', '$'];
+
+  // ===== 1. 世界信息 =====
+  if (data.世界信息) {
+    const w = data.世界信息;
+%>
+世界信息:
+  当前所处区域名称: <%= w.当前所处区域名称 || '未知区域' %>
+  具体位置: <%= w.具体位置 || '未知' %>
+  日期: <%= w.日期 || '?' %>  时间: <%= w.时间 || '?' %>  天气: <%= w.天气 || '?' %>
+<%
+  }
+
+  // ===== 2. 遍历根键，找到 User 和 NPC =====
+  for (const [key, val] of Object.entries(data)) {
+    if (SKIP_KEYS.includes(key) || key.startsWith('_') || key.startsWith('$')) continue;
+    if (key === '世界信息') continue;
+    if (key === 'NPC') continue;
+
+    // === User 数据（或其他顶层角色） ===
+    if (val && typeof val === 'object') {
+%>
+=== <%= key %> ===
+  属性: <%= val.属性 ? JSON.stringify(val.属性) : '—' %>
+  姿态动作: <%= val.姿态动作 || '—' %>
+  身体状态: <%= val.身体状态 || '—' %>
+<% if (val.状态 && typeof val.状态 === 'object' && Object.keys(val.状态).length) { %>
+  状态:
+<% for (const [sn, si] of Object.entries(val.状态)) { %>
+    - <%= sn %>: <%= si.效果 || '' %><% if (si.来源) { %> (来源: <%= si.来源 %>)<% } %><% if (si.持续时间) { %> [<%= si.持续时间 %>]<% } %>
+<% } %>
+<% } %>
+<% if (val.当前穿着衣物 && typeof val.当前穿着衣物 === 'object' && Object.keys(val.当前穿着衣物).length) { %>
+  当前穿着:
+<% for (const [cn, ci] of Object.entries(val.当前穿着衣物)) { %>
+    - <%= cn %> (<%= ci.穿着部位 || '' %>): <%= ci.外观详情 || '' %> [<%= ci.衣物状态 || '' %>]
+<% } %>
+<% } %>
+<% if (val.拥有物品 && typeof val.拥有物品 === 'object' && Object.keys(val.拥有物品).length) { %>
+  拥有物品: <%= JSON.stringify(val.拥有物品) %>
+<% } %>
+<% if (val.拥有技能 && typeof val.拥有技能 === 'object' && Object.keys(val.拥有技能).length) { %>
+  拥有技能: <%= JSON.stringify(val.拥有技能) %>
+<% } %>
+  位置: <%= val.位置 || '未知' %>
+<% if (val.货币 && val.货币.金钱 !== undefined) { %>  金钱: <%= val.货币.金钱 %><% } %>
+<%
+    }
+  }
+
+  // ===== 3. NPC 数据：在场完整，不在场仅基础信息 =====
+  const npcs = data.NPC || {};
+  const npcEntries = Object.entries(npcs).filter(([name, npc]) => {
+    return npc && typeof npc === 'object' && !name.startsWith('_') && !name.startsWith('$');
+  });
+
+  const presentNpcs = npcEntries.filter(([name, npc]) => npc.是否在场 === true);
+  const absentNpcs = npcEntries.filter(([name, npc]) => npc.是否在场 !== true);
+
+  if (presentNpcs.length) {
+%>
+=== 在场NPC (<%= presentNpcs.length %>人，完整信息) ===
+<%
+    for (const [name, npc] of presentNpcs) {
+%>
+--- <%= name %> (<%= npc.身份 || '未知身份' %>) ---
+  是否在场: true
+  生日日期: <%= npc.生日日期 || '未知' %>
+  心动:<%= npc.心动值 ?? 0 %> 情欲:<%= npc.情欲值 ?? 0 %> 兴奋:<%= npc.兴奋值 ?? 0 %> 敏感:<%= npc.敏感值 ?? 0 %> 羞耻:<%= npc.羞耻值 ?? 0 %>
+  高潮次数:<%= npc.高潮次数 ?? 0 %>  被内射次数:<%= npc.被内射次数 ?? 0 %>
+  情绪: <%= npc.当前情绪状态与心情 || '—' %>
+  内心想法: <%= npc.内心想法 || '—' %>
+  本能渴望: <%= npc.当前本能渴望 || '—' %>
+<% if (npc.属性 && typeof npc.属性 === 'object') { %>  属性: <%= JSON.stringify(npc.属性) %><% } %>
+  姿态动作: <%= npc.姿态动作 || '—' %>
+  身体状态: <%= npc.身体状态 || '—' %>
+<% if (npc.基础外貌) { %>  基础外貌: <%= npc.基础外貌 %><% } %>
+<% if (npc.当前穿着衣物 && typeof npc.当前穿着衣物 === 'object' && Object.keys(npc.当前穿着衣物).length) { %>  当前穿着: <%= JSON.stringify(npc.当前穿着衣物) %><% } %>
+<% if (npc.拥有物品 && typeof npc.拥有物品 === 'object' && Object.keys(npc.拥有物品).length) { %>  物品: <%= JSON.stringify(npc.拥有物品) %><% } %>
+<% if (npc.拥有技能 && typeof npc.拥有技能 === 'object' && Object.keys(npc.拥有技能).length) { %>  技能: <%= JSON.stringify(npc.拥有技能) %><% } %>
+<% if (npc.状态 && typeof npc.状态 === 'object' && Object.keys(npc.状态).length) { %>  状态: <%= JSON.stringify(npc.状态) %><% } %>
+<%
+    }
+  }
+
+  if (absentNpcs.length) {
+%>
+=== 不在场NPC (<%= absentNpcs.length %>人，仅基础信息) ===
+<%
+    for (const [name, npc] of absentNpcs) {
+%>
+- 姓名: <%= name %>
+  属性: <%= npc.属性 ? JSON.stringify(npc.属性) : '—' %>
+  生日日期: <%= npc.生日日期 || '未知' %>
+  是否在场: false
+<%
+    }
+  }
+%>
+</status_current_variable>

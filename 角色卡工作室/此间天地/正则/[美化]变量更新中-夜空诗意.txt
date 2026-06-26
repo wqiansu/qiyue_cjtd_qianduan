@@ -1,0 +1,117 @@
+<div style="width: 90%; margin: 24px auto;">
+  <details class="sweet-thinking-process" style="
+    background: linear-gradient(135deg, #fff0f5 0%, #fff 50%, #f0f9ff 100%);
+    border: 1px solid rgba(244, 114, 182, 0.4);
+    border-radius: 20px;
+    box-shadow:
+      0 8px 32px rgba(236, 72, 153, 0.15),
+      inset 0 0 20px rgba(255, 255, 255, 0.5);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    position: relative;
+  ">
+    <summary style="
+      padding: 16px 24px;
+      color: #9d174d;
+      cursor: pointer;
+      list-style: none;
+      font-weight: 600;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 2;
+      font-family: 'Microsoft YaHei', sans-serif;
+    ">
+      <!-- 旋转的灵感法球 -->
+      <span style="
+        font-size: 1.4em;
+        animation: spin-pulse 3s linear infinite;
+        filter: drop-shadow(0 0 8px rgba(244, 114, 182, 0.6));
+      ">💫</span>
+
+      <span style="flex: 1; letter-spacing: 1px;">仙云缭绕，推演天机...</span>
+
+      <!-- 装饰性符号 -->
+      <span style="font-size: 0.9em; color: #f472b6; opacity: 0.8;">🌸 ˚ ☁️</span>
+
+      <!-- 背景：流动的灵雾 -->
+      <span class="mist-flow" style="
+        position: absolute; top: 0; left: 0; width: 200%; height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent 0%,
+          rgba(252, 231, 243, 0.4) 25%,
+          rgba(236, 254, 255, 0.4) 50%,
+          rgba(252, 231, 243, 0.4) 75%,
+          transparent 100%
+        );
+        animation: mist-drift 6s linear infinite;
+        pointer-events: none;
+      "></span>
+    </summary>
+
+    <div style="
+      max-height: 320px;
+      overflow-y: auto;
+      padding: 14px 24px;
+      color: #831843;
+      font-size: 0.95em;
+      line-height: 1.7;
+      transition: all 0.3s ease;
+      white-space: pre-wrap;
+      background: rgba(255, 255, 255, 0.6);
+      border-top: 1px dashed rgba(244, 114, 182, 0.2);
+    ">
+    $1
+    </div>
+  </details>
+</div>
+
+<style>
+  /* 滚动条 */
+  .sweet-thinking-process ::-webkit-scrollbar { width: 6px; }
+  .sweet-thinking-process ::-webkit-scrollbar-track { background: transparent; }
+  .sweet-thinking-process ::-webkit-scrollbar-thumb {
+    background: #fbcfe8; border-radius: 3px;
+  }
+  .sweet-thinking-process ::-webkit-scrollbar-thumb:hover { background: #f472b6; }
+
+  /* 展开状态 */
+  .sweet-thinking-process[open] {
+    box-shadow:
+      0 12px 40px rgba(236, 72, 153, 0.25),
+      inset 0 0 0 2px rgba(255, 255, 255, 0.8) !important;
+    border-color: #f9a8d4 !important;
+    background: #fff !important;
+  }
+
+  .sweet-thinking-process[open] > div {
+    animation: mistFadeIn 0.5s ease forwards;
+  }
+
+  /* 悬停效果 */
+  .sweet-thinking-process summary:hover {
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  /* 去除默认三角 */
+  .sweet-thinking-process summary::marker { display: none; }
+
+  /* 动画定义 */
+  @keyframes spin-pulse {
+    0% { transform: rotate(0deg) scale(1); }
+    50% { transform: rotate(180deg) scale(1.1); }
+    100% { transform: rotate(360deg) scale(1); }
+  }
+
+  @keyframes mist-drift {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  @keyframes mistFadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>

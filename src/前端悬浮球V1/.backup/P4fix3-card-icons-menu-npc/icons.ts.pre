@@ -1,0 +1,245 @@
+// 前端悬浮球V1 — 图标库
+// 把原 FontAwesome class 名（fa-X fa-Y）映射到 Lucide 同义 SVG。
+// 用法：iconHtml('fa-heart') / iconHtml('fa-solid fa-heart') / iconHtml('heart') 都行
+//
+// 状态栏内部用 jQuery + innerHTML 拼字符串，必须把 SVG 作为字符串塞进模板；
+// lucide-static 的 export 是 named const，每个图标是一个完整 `<svg>...</svg>` 字符串。
+
+import {
+  Heart, Flame, Sparkles, Droplets, Droplet,
+  MapPin, MapPinOff, MapPinned,
+  Compass, Flag, Crown, Gem,
+  SlidersHorizontal, RotateCw, RotateCcw,
+  CloudMoon, CloudSun, Sun, Moon, Clock, CalendarDays,
+  Box, ScrollText, Shirt, WandSparkles, Package,
+  TriangleAlert, Check, X, Plus, Search,
+  ChartPie, UserRound, Camera, Trash2, Images, Tag,
+  HandHeart, Hand, MessageCircle, Crosshair,
+  Smile, Cake, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  BookOpen, Book, Info, AlignLeft, ArrowLeft, Eye,
+  Power, SquarePen, Save, Download, Upload, HeartPulse, ShieldQuestion,
+  Puzzle, FolderPlus,
+  ToggleLeft, ToggleRight, Pen, Star, StarHalf, Copy,
+  Sprout, Link2, Filter, SquareCheck, Boxes, Tags,
+  // 反馈9：新建储藏间类别图标选择器需要的新增映射
+  // 注意：lucide-static 没有 Ring/HatWizard（返回 undefined 会让 inner 崩溃），
+  // 用 Disc 代替戒指、GraduationCap 代替巫师帽。
+  Trophy, Sword, Zap, ShieldHalf, Music, Palette, Feather,
+  Disc, GraduationCap, KeyRound, Coins, Map as MapIcon, Gift,
+  Leaf,
+  // 反馈7：储藏间"按标签配发"按钮图标（fa-share）
+  Share2, Users,
+} from 'lucide-static';
+
+function inner(svg: string | undefined): string {
+  // 防御：若某个 lucide 图标名拼错/不存在（返回 undefined），不要让整个模块加载崩溃
+  // （历史上 Ring/HatWizard 就因不存在导致悬浮球整体消失）。返回空串 → 渲染为缺失占位。
+  if (!svg || typeof svg !== 'string') return '';
+  const m = svg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+  return m ? m[1].trim() : '';
+}
+
+// fa → lucide 映射
+const ICONS: Record<string, string> = {
+  // 数值 / 状态
+  heart:                      inner(Heart),
+  'fire-flame-curved':        inner(Flame),
+  sparkles:                   inner(Sparkles),
+  water:                      inner(Droplets),
+  droplet:                    inner(Droplet),
+  droplets:                   inner(Droplets),
+  'face-grin-wide':           inner(Smile),
+  'face-smile':               inner(Smile),
+  'triangle-exclamation':     inner(TriangleAlert),
+  check:                      inner(Check),
+  circle:                     '',                       // fa-circle 多用于点缀，渲染空
+  'heart-circle-plus':        inner(HeartPulse),
+
+  // 位置 / 场景
+  'map-pin':                  inner(MapPin),
+  'location-dot':             inner(MapPinned),
+  compass:                    inner(Compass),
+  'wand-magic-sparkles':      inner(WandSparkles),
+  'wand-magic':               inner(WandSparkles),
+  crown:                      inner(Crown),
+  gem:                        inner(Gem),
+  flag:                       inner(Flag),
+  'puzzle-piece':             inner(Puzzle),
+  puzzle:                     inner(Puzzle),
+  'treasure-chest':           inner(Package),
+  box:                        inner(Box),
+  'folder-plus':              inner(FolderPlus),
+
+  // 衣物
+  vest:                       inner(Shirt),
+  shirt:                      inner(Shirt),
+  'hand-holding-heart':       inner(HandHeart),
+  'child-reaching':           inner(Hand),
+
+  // 物品 / 技能
+  'box-open':                 inner(Box),
+  scroll:                     inner(ScrollText),
+  'scroll-text':              inner(ScrollText),
+  bag:                        inner(Box),
+
+  // 头像 / 身份
+  'user-astronaut':           inner(UserRound),
+  user:                       inner(UserRound),
+  'camera-retro':             inner(Camera),
+  camera:                     inner(Camera),
+  trash:                      inner(Trash2),
+  'trash-2':                  inner(Trash2),
+
+  // 世界 / 时间
+  clock:                      inner(Clock),
+  'calendar-days':            inner(CalendarDays),
+  sun:                        inner(Sun),
+  moon:                       inner(Moon),
+  'cloud-sun':                inner(CloudSun),
+  'cloud-moon':               inner(CloudMoon),
+
+  // 动作按钮
+  sliders:                    inner(SlidersHorizontal),
+  'sliders-horizontal':       inner(SlidersHorizontal),
+  'rotate-right':             inner(RotateCw),
+  'rotate-cw':                inner(RotateCw),
+  rotate:                     inner(RotateCcw),
+  'rotate-ccw':               inner(RotateCcw),
+  'arrow-left':               inner(ArrowLeft),
+  alignleft:                  inner(AlignLeft),
+  'align-left':               inner(AlignLeft),
+  comment:                    inner(MessageCircle),
+  'message-circle':           inner(MessageCircle),
+  'message-square':           inner(MessageCircle),
+  'circle-info':              inner(Info),
+  info:                       inner(Info),
+  eye:                        inner(Eye),
+  crosshairs:                 inner(Crosshair),
+  target:                     inner(Crosshair),
+  tag:                        inner(Tag),
+  question:                   inner(ShieldQuestion),
+  'shield-question':          inner(ShieldQuestion),
+  cake:                       inner(Cake),
+  'cake-candles':             inner(Cake),
+  'pen-to-square':            inner(SquarePen),
+  'pen-square':               inner(SquarePen),
+  edit:                       inner(SquarePen),
+  'floppy-disk':              inner(Save),
+  save:                       inner(Save),
+  download:                   inner(Download),
+  upload:                     inner(Upload),
+  power:                      inner(Power),
+  'power-off':                inner(Power),
+  images:                     inner(Images),
+  'map-pin-off':              inner(MapPinOff),
+
+  // 卡片工具栏（§10.6）
+  'toggle-on':                inner(ToggleRight),
+  'toggle-off':               inner(ToggleLeft),
+  toggle:                     inner(ToggleRight),
+  'toggle-right':             inner(ToggleRight),
+  'toggle-left':              inner(ToggleLeft),
+  pen:                        inner(Pen),
+  'pen-nib':                  inner(Pen),
+  'pen-fancy':                inner(Pen),
+  star:                       inner(Star),
+  'star-half':                inner(StarHalf),
+  'star-half-stroke':         inner(StarHalf),
+  copy:                       inner(Copy),
+
+  // 初始数据 / 关联 / 批量（§10.6 Build 2）
+  seedling:                   inner(Sprout),
+  sprout:                     inner(Sprout),
+  link:                       inner(Link2),
+  'link-2':                   inner(Link2),
+  'link-simple':              inner(Link2),
+  filter:                     inner(Filter),
+  'square-check':             inner(SquareCheck),
+  'check-double':             inner(SquareCheck),
+  boxes:                      inner(Boxes),
+  'box-archive':              inner(Boxes),
+  tags:                       inner(Tags),
+
+  // 运行时导入(§10.6 Build 2)
+  'cloud-arrow-down':         inner(Download),
+  'cloud-download':           inner(Download),
+
+  // 箭头 / 折叠
+  'chevron-down':             inner(ChevronDown),
+  'chevron-up':               inner(ChevronUp),
+  'chevron-left':             inner(ChevronLeft),
+  'chevron-right':            inner(ChevronRight),
+
+  // 关闭 / 添加
+  xmark:                      inner(X),
+  x:                          inner(X),
+  close:                      inner(X),
+  plus:                       inner(Plus),
+
+  // 搜索
+  search:                     inner(Search),
+  'magnifying-glass':         inner(Search),
+
+  // 统计
+  'chart-pie':                inner(ChartPie),
+
+  // 世界书
+  'book-open':                inner(BookOpen),
+  book:                       inner(Book),
+
+  // 反馈9：新建储藏间类别图标选择器（fa → lucide）
+  trophy:                     inner(Trophy),
+  sword:                      inner(Sword),
+  bolt:                       inner(Zap),
+  zap:                        inner(Zap),
+  'shield-halved':            inner(ShieldHalf),
+  shield:                     inner(ShieldHalf),
+  music:                      inner(Music),
+  palette:                    inner(Palette),
+  feather:                    inner(Feather),
+  ring:                       inner(Disc),
+  'hat-wizard':               inner(GraduationCap),
+  key:                        inner(KeyRound),
+  'key-round':                inner(KeyRound),
+  coins:                      inner(Coins),
+  map:                        inner(MapIcon),
+  gift:                       inner(Gift),
+  leaf:                       inner(Leaf),
+
+  // 反馈7：储藏间"按标签配发"按钮（fa-share）
+  share:                      inner(Share2),
+  'share-nodes':              inner(Share2),
+  users:                      inner(Users),
+  'user-group':               inner(Users),
+};
+
+/**
+ * 返回一个 Lucide SVG 字符串。
+ * @param name 接受 'fa-heart' / 'fa-solid fa-heart' / 'heart' / 'fa-xxx fa-heart' 等
+ * @param size 像素，缺省 1em（与原 <i> 等大）
+ */
+export function iconHtml(name: string, size: number | string = '1em'): string {
+  if (!name) return '';
+  // 取最后一段作为 key
+  const parts = name.trim().split(/\s+/);
+  let key = parts[parts.length - 1] || '';
+  if (key.startsWith('fa-')) key = key.slice(3);
+  const body = ICONS[key];
+  if (body === undefined) {
+    return `<svg class="th-ico th-ico-missing" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>`;
+  }
+  if (body === '') return ''; // circle 之类刻意不渲染
+  return `<svg class="th-ico th-ico-${key}" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
+
+/**
+ * 字符串后处理：把所有 `<i class="fa-X fa-Y"></i>` 自动换成 lucide SVG。
+ * 状态栏里所有 innerHTML 模板字面量都过一遍。
+ */
+export function stripFa(s: unknown): string {
+  if (typeof s !== 'string' || !s) return s as string;
+  return s.replace(
+    /<i\s+class="(fa-(?:solid|regular|brands|light|thin)\s+fa-[a-z0-9-]+)"\s*><\/i>/gi,
+    (_, cls) => iconHtml(cls),
+  );
+}

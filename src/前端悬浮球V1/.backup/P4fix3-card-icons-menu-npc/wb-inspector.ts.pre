@@ -1,0 +1,316 @@
+// 世界书识别器 modal + 条目编辑器（解耦阶段 1e）。
+// 从 status-bar-init.ts 纯移动；行为保持一致。
+// 依赖主文件保留的世界书/managed 状态工具与二级弹窗基元。
+// ================================================================
+import { MANAGED_CFG } from '../lib/config';
+import { type InspectorEntry } from '../lib/managed-store';
+import { esc, escAttr, qs, qsa, clamp } from '../lib/dom-utils';
+import { safeGetWorldbook } from '../lib/tavern-api';
+import {
+  openModal,
+  openModal2,
+  closeModal2,
+} from '../status-bar-init';
+import {
+  loadInspectorEntries,
+  sortInspectorEntries,
+  strategyLabel,
+  positionLabel,
+  updateInspectorEntry,
+  refreshManagedStatesAfterWorldbookEdit,
+  parseManagedEntryName,
+  keysToText,
+  textToKeys,
+  numberFromInput,
+  nullableNumberFromInput,
+  boolFromSelect,
+} from './managed-modal';
+
+export async function openWorldbookInspectorModal(filter='') {
+  let entries:InspectorEntry[]=[];
+  try { entries=await loadInspectorEntries(); }
+  catch(e){ console.warn('[此间天地] 世界书读取失败',e); toastr?.warning?.('世界书读取失败，请确认当前角色卡已绑定世界书'); entries=[]; }
+  entries=sortInspectorEntries(entries);
+  let h=`<div class=\"th-wb-tools\"><input class=\"th-wb-search th-edit-input\" id=\"th-wb-search\" placeholder=\"搜索世界书、条目名或内容...\" value=\"${escAttr(filter)}\"><button class=\"th-wb-refresh\" id=\"th-wb-refresh\"><i class=\"fa-solid fa-rotate\"></i> 刷新</button></div>`;
+  h+=renderWorldbookInspectorBody(entries,filter);
+  openModal(`<i class=\"fa-solid fa-book-open\"></i> 世界书识别 <span class=\"th-modal-title-actions\"><button class=\"th-title-io-btn\" id=\"th-wb-title-refresh\" title=\"刷新\"><i class=\"fa-solid fa-rotate\"></i></button></span>`,h);
+  setTimeout(()=>bindWorldbookInspectorEvents(filter, entries),60);
+}
+
+// IME 组字标志：避免 input 事件在拼音组字过程中触发搜索重渲染导致输入中断。
+// 原挂在 window.__wbSearchComposing__ 全局，改为模块闭包变量（单实例，无并发需求）。
+let wbSearchComposing = false;
+
+function renderWorldbookInspectorBody(entries:InspectorEntry[], filter:string): string {
+  const q=filter.trim().toLowerCase();
+  const filtered=q?entries.filter(item=>`${item.worldbookName} ${item.entry.name} ${item.entry.content}`.toLowerCase().includes(q)):entries;
+  if(!entries.length) return `<div class=\"th-wb-body\"><div class=\"th-empty\"><i class=\"fa-solid fa-book-open\"></i> 当前角色卡没有可读取的世界书条目</div></div>`;
+  return `<div class=\"th-wb-body\"><div class=\"th-wb-summary\"><i class=\"fa-solid fa-book\"></i> 已读取 ${entries.length} 个角色卡世界书条目，当前显示 ${filtered.length} 个</div><div class=\"th-wb-list\">${renderWorldbookInspectorList(filtered)}</div></div>`;
+}
+
+function renderWorldbookInspectorList(items:InspectorEntry[]): string {
+  return items.map(item=>{
+    const e=item.entry;
+    const managed=item.managedKind?`<span class=\"th-wb-prefix ${item.managedKind}\">${MANAGED_CFG[item.managedKind].prefix}</span>`:'';
+    const strategy=e.strategy?.type||'constant';
+    const pos=e.position||{} as WorldbookEntry['position'];
+    return `<div class=\"th-wb-row\" data-wb=\"${escAttr(item.worldbookName)}\" data-uid=\"${e.uid}\">
+      <div class=\"th-wb-row-main\">
+        <span class=\"th-bind-dot ${e.enabled?'bound':'unbound'}\"></span>
+        <div class=\"th-wb-row-title\"><span class=\"th-wb-name\">${managed}${esc(e.name)}</span><span class=\"th-wb-book\"><i class=\"fa-solid fa-book\"></i> ${esc(item.worldbookName)} · order ${esc(pos.order??0)}</span></div>
+      </div>
+      <div class=\"th-wb-row-actions\">
+        <button class=\"th-wb-switch-mini ${e.enabled?'on':'off'}\" data-wb-action=\"toggle\" title=\"${e.enabled?'点击关闭':'点击开启'}\" aria-label=\"开关\"><span class=\"th-wb-switch-mini-track\"><span class=\"th-wb-switch-mini-thumb\"></span></span></button>
+        <button class=\"th-wb-chip strategy ${strategy}\" data-wb-action=\"strategy\">${strategyLabel(strategy)}</button>
+        <span class=\"th-wb-chip pos\">${esc(positionLabel(pos.type))}</span>
+        <button class=\"th-wb-detail-btn\" data-wb-action=\"detail\"><i class=\"fa-solid fa-pen-to-square\"></i> 详情</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function bindWorldbookInspectorEvents(filter:string, entries:InspectorEntry[]) {
+  qs('#th-wb-refresh')?.addEventListener('click',()=>{ void openWorldbookInspectorModal((qs<HTMLInputElement>('#th-wb-search')?.value||filter)); });
+  qs('#th-wb-title-refresh')?.addEventListener('click',()=>{ void openWorldbookInspectorModal((qs<HTMLInputElement>('#th-wb-search')?.value||filter)); });
+  qs('#th-wb-search')?.addEventListener('compositionstart',()=>{ wbSearchComposing=true; });
+  qs('#th-wb-search')?.addEventListener('compositionend',function(this:HTMLInputElement){
+    wbSearchComposing=false;
+    renderWorldbookSearchBody(entries,this.value);
+  });
+  qs('#th-wb-search')?.addEventListener('input',function(this:HTMLInputElement){
+    if(wbSearchComposing) return;
+    renderWorldbookSearchBody(entries,this.value);
+  });
+  bindWorldbookRows(filter);
+}
+
+function renderWorldbookSearchBody(entries:InspectorEntry[], value:string) {
+  const body=qs('.th-wb-body');
+  if(body) body.outerHTML=renderWorldbookInspectorBody(entries,value);
+  bindWorldbookRows(value);
+}
+
+function bindWorldbookRows(filter:string) {
+  qsa('.th-wb-row').forEach(row=>row.addEventListener('click',async function(this:HTMLElement,e:Event){
+    const action=(e.target as HTMLElement).closest<HTMLElement>('[data-wb-action]')?.getAttribute('data-wb-action')||'';
+    if(!action) return;
+    e.stopPropagation();
+    const worldbookName=this.getAttribute('data-wb')||'';
+    const uid=Number(this.getAttribute('data-uid'));
+    if(!worldbookName||isNaN(uid)) return;
+    if(action==='detail'){ await openWorldbookEntryDetail(worldbookName,uid); return; }
+    if(action==='toggle'){
+      await updateInspectorEntry(worldbookName,uid,entry=>({...entry,enabled:!entry.enabled}));
+    } else if(action==='strategy'){
+      await updateInspectorEntry(worldbookName,uid,entry=>{
+        const current=entry.strategy?.type||'constant';
+        const next=current==='constant'?'selective':'constant';
+        const fallback=parseManagedEntryName(entry.name).name||entry.name;
+        return {...entry,strategy:{...entry.strategy,type:next,keys:next==='selective'&&(!entry.strategy.keys||!entry.strategy.keys.length)?[fallback]:entry.strategy.keys}};
+      });
+    }
+    await refreshManagedStatesAfterWorldbookEdit();
+    void openWorldbookInspectorModal((qs<HTMLInputElement>('#th-wb-search')?.value||filter));
+  }));
+}
+
+async function openWorldbookEntryDetail(worldbookName:string, uid:number) {
+  const entries=await safeGetWorldbook(worldbookName);
+  const entry=entries.find(e=>e.uid===uid);
+  if(!entry){ toastr?.warning?.('条目不存在，可能已被修改或删除'); return; }
+  const h=renderWorldbookEntryEditor(worldbookName,entry);
+  openModal2(`<i class=\"fa-solid fa-pen-to-square\"></i> 世界书条目设置`,h);
+  setTimeout(()=>bindWorldbookEntryEditor(worldbookName,uid),60);
+}
+
+function renderSelect(name:string, value:string, options:[string,string][]): string {
+  return `<select class=\"th-wb-field th-edit-select\" data-wb-field=\"${name}\">${options.map(([v,l])=>`<option value=\"${escAttr(v)}\" ${v===value?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+}
+function renderInput(name:string,value:any,type='text'): string { return `<input class=\"th-wb-field th-edit-input\" data-wb-field=\"${name}\" type=\"${type}\" value=\"${escAttr(value??'')}\">`; }
+function renderTextarea(name:string,value:any,rows=3): string { return `<textarea class=\"th-wb-field th-edit-textarea\" data-wb-field=\"${name}\" rows=\"${rows}\">${esc(value??'')}</textarea>`; }
+// §10.11 ⑥:布尔字段改 galgame 滑动开关(隐藏 checkbox + slider),不用 select 是/否
+function renderBool(name:string,value:boolean): string {
+  const checked=!!value?'checked':'';
+  return `<label class="th-wb-switch"><input type="checkbox" class="th-wb-field th-wb-switch-input" data-wb-field="${escAttr(name)}" ${checked}><span class="th-wb-switch-track"><span class="th-wb-switch-thumb"></span></span></label>`;
+}
+// 分组小标题(可折叠) — §10.11 ⑥
+function renderGroupHeader(title:string, icon:string, collapsed=false): string {
+  return `<div class="th-wb-group-header" data-wb-group-toggle="${escAttr(title)}" data-collapsed="${collapsed?'true':'false'}"><i class="${icon}"></i><span>${esc(title)}</span><i class="fa-solid fa-chevron-down th-wb-group-caret"></i></div>`;
+}
+
+function renderWorldbookEntryEditor(worldbookName:string, entry:WorldbookEntry): string {
+  const s=entry.strategy||{} as WorldbookEntry['strategy'];
+  const p=entry.position||{} as WorldbookEntry['position'];
+  const r=entry.recursion||{} as WorldbookEntry['recursion'];
+  const ef=entry.effect||{} as WorldbookEntry['effect'];
+  return `<div class="th-wb-editor" data-wb="${escAttr(worldbookName)}" data-uid="${entry.uid}">
+    <div class="th-wb-editor-meta"><span><i class="fa-solid fa-book"></i> ${esc(worldbookName)}</span><span>order ${esc(entry.position?.order??0)}</span></div>
+
+    <label class="th-wb-name-row">条目名称${renderInput('name',entry.name)}</label>
+
+    ${renderGroupHeader('激活策略','fa-solid fa-key',false)}
+    <div class="th-wb-group-body" data-wb-group="激活策略">
+    <div class="th-wb-form-grid">
+      <label>启用状态${renderBool('enabled',entry.enabled)}</label>
+      <label>激活策略${renderSelect('strategy.type',s.type||'constant', [['constant','蓝灯 / 常量'],['selective','绿灯 / 关键词'],['vectorized','向量化']])}</label>
+      <label>激活概率%${renderInput('probability',entry.probability??100,'number')}</label>
+      <label>扫描深度${renderInput('strategy.scan_depth',s.scan_depth==='same_as_global'?'':s.scan_depth??'','number')}</label>
+      <label>次要逻辑${renderSelect('strategy.keys_secondary.logic',s.keys_secondary?.logic||'and_any', [['and_any','任一满足'],['and_all','全部满足'],['not_all','不全满足'],['not_any','全部不满足']])}</label>
+    </div>
+    <div class="th-wb-form-wide">
+      <label>主要关键词（逗号或换行分隔）${renderTextarea('strategy.keys',keysToText(s.keys||[]),3)}</label>
+      <label>次要关键词（逗号或换行分隔）${renderTextarea('strategy.keys_secondary.keys',keysToText(s.keys_secondary?.keys||[]),3)}</label>
+    </div>
+    </div>
+
+    ${renderGroupHeader('插入位置','fa-solid fa-arrows-to-dot',false)}
+    <div class="th-wb-group-body" data-wb-group="插入位置">
+    <div class="th-wb-form-grid">
+      <label>插入位置${renderSelect('position.type',p.type||'after_character_definition', [['before_character_definition','角色定义前'],['after_character_definition','角色定义后'],['before_example_messages','示例消息前'],['after_example_messages','示例消息后'],['before_author_note','作者注释前'],['after_author_note','作者注释后'],['at_depth','指定深度'],['outlet','出口']])}</label>
+      <label>插入身份${renderSelect('position.role',p.role||'system', [['system','system'],['assistant','assistant'],['user','user']])}</label>
+      <label>插入深度${renderInput('position.depth',p.depth??4,'number')}</label>
+      <label>排序 order${renderInput('position.order',p.order??100,'number')}</label>
+    </div>
+    </div>
+
+    ${renderGroupHeader('递归','fa-solid fa-rotate',true)}
+    <div class="th-wb-group-body" data-wb-group="递归">
+    <div class="th-wb-form-grid">
+      <label>递归延迟${renderInput('recursion.delay_until',r.delay_until??'','number')}</label>
+      <label>禁止入递归${renderBool('recursion.prevent_incoming',!!r.prevent_incoming)}</label>
+      <label>禁止出递归${renderBool('recursion.prevent_outgoing',!!r.prevent_outgoing)}</label>
+    </div>
+    </div>
+
+    ${renderGroupHeader('效果','fa-solid fa-bolt',true)}
+    <div class="th-wb-group-body" data-wb-group="效果">
+    <div class="th-wb-form-grid">
+      <label>黏性 sticky${renderInput('effect.sticky',ef.sticky??'','number')}</label>
+      <label>冷却 cooldown${renderInput('effect.cooldown',ef.cooldown??'','number')}</label>
+      <label>延迟 delay${renderInput('effect.delay',ef.delay??'','number')}</label>
+    </div>
+    </div>
+
+    ${renderGroupHeader('内容与扩展','fa-solid fa-align-left',false)}
+    <div class="th-wb-group-body" data-wb-group="内容与扩展">
+    <div class="th-wb-form-wide">
+      <label>条目内容${renderTextarea('content',entry.content||'',8)}</label>
+      <label>额外数据 extra（JSON，可留空）${renderTextarea('extra',entry.extra?JSON.stringify(entry.extra,null,2):'',4)}<div class="th-wb-extra-tools"><button type="button" class="th-wb-extra-btn" data-wb-extra="format"><i class="fa-solid fa-wand-magic-sparkles"></i> 格式化</button><button type="button" class="th-wb-extra-btn" data-wb-extra="validate"><i class="fa-solid fa-circle-check"></i> 校验</button></div></label>
+    </div>
+    </div>
+
+    <div class="th-wb-editor-actions"><button class="th-wb-save" id="th-wb-entry-save"><i class="fa-solid fa-floppy-disk"></i> 保存修改</button><button class="th-wb-cancel" id="th-wb-entry-cancel"><i class="fa-solid fa-xmark"></i> 取消</button></div>
+  </div>`;
+}
+
+function getWbFieldValue(field:string): string {
+  const el=qs<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>(`[data-wb-field="${field}"]`);
+  if(!el) return '';
+  // §10.11 ⑥:滑动开关是 checkbox,读 checked 转 'true'/'false'(兼容 boolFromSelect)
+  if(el instanceof HTMLInputElement && el.type==='checkbox') return (el as HTMLInputElement).checked?'true':'false';
+  return el.value||'';
+}
+function bindWorldbookEntryEditor(worldbookName:string, uid:number) {
+  qs('#th-wb-entry-cancel')?.addEventListener('click',closeModal2);
+
+  // §10.11 ⑥:分组折叠
+  qsa('.th-wb-group-header').forEach(hd=>hd.addEventListener('click',function(this:HTMLElement){
+    const collapsed=this.getAttribute('data-collapsed')==='true';
+    this.setAttribute('data-collapsed',collapsed?'false':'true');
+    const body=this.nextElementSibling as HTMLElement|null;
+    if(body) body.style.display=collapsed?'':'none';
+    const caret=this.querySelector('.th-wb-group-caret');
+    if(caret) caret.setAttribute('style',collapsed?'':'transform:rotate(-90deg)');
+  }));
+
+  // §10.11 ⑥:extra JSON 格式化 / 校验
+  qsa('[data-wb-extra]').forEach(btn=>btn.addEventListener('click',function(this:HTMLElement,e:Event){
+    e.preventDefault();
+    const op=this.getAttribute('data-wb-extra');
+    const ta=qs<HTMLTextAreaElement>('[data-wb-field="extra"]');
+    if(!ta) return;
+    const raw=ta.value.trim();
+    if(op==='format'){
+      if(!raw){ toastr?.info?.('extra 为空，无需格式化'); return; }
+      try{ ta.value=JSON.stringify(JSON.parse(raw),null,2); toastr?.success?.('JSON 已格式化'); }
+      catch(err){ toastr?.error?.('JSON 格式错误，无法格式化：'+(err as Error).message); }
+    } else if(op==='validate'){
+      if(!raw){ toastr?.info?.('extra 为空（合法）'); return; }
+      try{ JSON.parse(raw); toastr?.success?.('JSON 格式正确'); }
+      catch(err){ toastr?.error?.('JSON 格式错误：'+(err as Error).message); }
+    }
+  }));
+
+  qs('#th-wb-entry-save')?.addEventListener('click',async()=>{
+    try{
+      await updateInspectorEntry(worldbookName,uid,entry=>{
+        const extraRaw=getWbFieldValue('extra').trim();
+        let extra:any=undefined;
+        if(extraRaw) extra=JSON.parse(extraRaw);
+        const strategyType=getWbFieldValue('strategy.type') as WorldbookEntry['strategy']['type'];
+        const keys=textToKeys(getWbFieldValue('strategy.keys'));
+        const fallback=parseManagedEntryName(getWbFieldValue('name')).name||getWbFieldValue('name');
+        return {
+          ...entry,
+          name:getWbFieldValue('name').trim()||entry.name,
+          enabled:boolFromSelect(getWbFieldValue('enabled')),
+          probability:clamp(numberFromInput(getWbFieldValue('probability'),entry.probability??100),0,100),
+          content:getWbFieldValue('content'),
+          extra,
+          strategy:{
+            ...entry.strategy,
+            type:strategyType,
+            keys:strategyType==='selective'&&!keys.length?[fallback]:keys,
+            scan_depth:getWbFieldValue('strategy.scan_depth').trim()?numberFromInput(getWbFieldValue('strategy.scan_depth'),1):'same_as_global',
+            keys_secondary:{
+              logic:getWbFieldValue('strategy.keys_secondary.logic') as WorldbookEntry['strategy']['keys_secondary']['logic'],
+              keys:textToKeys(getWbFieldValue('strategy.keys_secondary.keys')),
+            },
+          },
+          position:{
+            ...entry.position,
+            type:getWbFieldValue('position.type') as WorldbookEntry['position']['type'],
+            role:getWbFieldValue('position.role') as WorldbookEntry['position']['role'],
+            depth:numberFromInput(getWbFieldValue('position.depth'),entry.position?.depth??4),
+            order:numberFromInput(getWbFieldValue('position.order'),entry.position?.order??100),
+          },
+          recursion:{
+            prevent_incoming:boolFromSelect(getWbFieldValue('recursion.prevent_incoming')),
+            prevent_outgoing:boolFromSelect(getWbFieldValue('recursion.prevent_outgoing')),
+            delay_until:nullableNumberFromInput(getWbFieldValue('recursion.delay_until')),
+          },
+          effect:{
+            sticky:nullableNumberFromInput(getWbFieldValue('effect.sticky')),
+            cooldown:nullableNumberFromInput(getWbFieldValue('effect.cooldown')),
+            delay:nullableNumberFromInput(getWbFieldValue('effect.delay')),
+          },
+        };
+      });
+      await refreshManagedStatesAfterWorldbookEdit();
+      toastr?.success?.('世界书条目已保存');
+      // §10.11 ⑥:保存后局部更新 — 不重开识别器,只更新本行 chip + 恢复识别器滚动位置
+      await partialRefreshInspectorRow(worldbookName,uid);
+      closeModal2();
+    }catch(e){ console.warn('[此间天地] 保存世界书条目失败',e); toastr?.error?.('保存失败：请检查 extra JSON 或字段内容'); }
+  });
+}
+
+// §10.11 ⑥:保存后局部刷新识别器该行(不重开 modal,恢复滚动位置)
+// 当前实现:全量重渲染列表但保持搜索过滤 + 滚动位置(比单行刷更稳,数据一致)
+async function partialRefreshInspectorRow(_worldbookName:string, _uid:number) {
+  const overlay=qs('.th-modal-overlay');
+  if(!overlay || overlay.style.display==='none') return; // 识别器未开,无需刷新
+  const scrollTop=qs('.th-modal-body')?.scrollTop||0;
+  const searchVal=qs<HTMLInputElement>('#th-wb-search')?.value||'';
+  // 重新读取条目并重渲染列表(保持搜索过滤 + 滚动位置)
+  let entries:InspectorEntry[]=[];
+  try { entries=await loadInspectorEntries(); }
+  catch { return; }
+  entries=sortInspectorEntries(entries);
+  const body=qs('.th-wb-body');
+  if(body){
+    body.outerHTML=renderWorldbookInspectorBody(entries,searchVal);
+    bindWorldbookRows(searchVal);
+    setTimeout(()=>{ const mb=qs('.th-modal-body'); if(mb) mb.scrollTop=scrollTop; },10);
+  }
+}

@@ -22,7 +22,36 @@
       "mcp__chrome-devtools__wait_for",
       "Bash(taskkill //PID 29056 //F)",
       "Bash(netstat -ano)",
-      "Bash(pnpm build *)"
+      "Bash(pnpm build *)",
+      "Bash(git stash *)",
+      "Bash(pnpm build:dev)",
+      "mcp__chrome-devtools__navigate_page",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__hover",
+      "Bash(rm -f \"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\.claude\\\\\\\\projects\\\\\\\\c--cursor-ewai-tavern-helper-template-main\\\\\\\\*console*.txt\" 2>/dev/null; true)",
+      "Bash(grep -n \"DEBUG 0615\" \"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\.claude\\\\\\\\projects\\\\\\\\c--cursor-ewai-tavern-helper-template-main\\\\\\\\6020ca55-6e63-4007-8f44-d0eab07a88ec\\\\\\\\tool-results\\\\\\\\mcp-chrome-devtools-list_console_messages-1781623437530.txt\")",
+      "Bash(grep -B 2 -A 2 \"发现旧 timer\\\\|发现 tip opacity\" \"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\.claude\\\\\\\\projects\\\\\\\\c--cursor-ewai-tavern-helper-template-main\\\\\\\\6020ca55-6e63-4007-8f44-d0eab07a88ec\\\\\\\\tool-results\\\\\\\\mcp-chrome-devtools-list_console_messages-1781623437530.txt\")",
+      "Bash(grep -n -E \"inBall|inTip|outGraceTimer\" \"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\.claude\\\\\\\\projects\\\\\\\\c--cursor-ewai-tavern-helper-template-main\\\\\\\\6020ca55-6e63-4007-8f44-d0eab07a88ec\\\\\\\\tool-results\\\\\\\\mcp-chrome-devtools-list_console_messages-1781623437530.txt\")",
+      "Bash(grep -A 3 \"mouseMonitor 轮询\" \"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\.claude\\\\\\\\projects\\\\\\\\c--cursor-ewai-tavern-helper-template-main\\\\\\\\6020ca55-6e63-4007-8f44-d0eab07a88ec\\\\\\\\tool-results\\\\\\\\mcp-chrome-devtools-list_console_messages-1781623437530.txt\")",
+      "Bash(cd \"c:/cursor/ewai/tavern_helper_template-main\" && stat -c '%y  %n' \"dist/0615悬浮球/index.js\" 2>&1 && echo \"---\" && grep -c 'bindManagedCardEvents' \"dist/0615悬浮球/index.js\" && echo \"---console.log count in dist---\" && grep -c '\\\\[bindManagedCardEvents\\\\]\\\\|\\\\[openManagedModal\\\\]\\\\|\\\\[bindManagedModalEvents\\\\]' \"dist/0615悬浮球/index.js\")",
+      "Read(//c/cursor/ewai/tavern_helper_template-main/**)",
+      "Bash(node -e ' *)",
+      "Bash(grep -nE \"版本|作者:|头像:|备注:|required|\\\\.describe\\\\\\('角色|first_mes|第一条消息|description:.{0,40}角色|personality\" tavern_sync.mjs)",
+      "Bash(node tavern_sync.mjs bundle色卡示例)",
+      "Bash(node tavern_sync.mjs bundle \"角色卡示例\")",
+      "Bash(node tmp/remap.js)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(node tmp/patch_regex_source.js)",
+      "Bash(echo \"---exit=$?---\")",
+      "Bash(node tmp/diff_bundled.js)",
+      "Bash(ls -la lib/world/ modules/world/ .backup/)",
+      "Bash(ls -la .backup/world-p0/)",
+      "Bash(echo \"=== exit $? ===\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Administrator\\.claude\\projects\\c--cursor-ewai-tavern-helper-template-main"
     ]
   }
 }
