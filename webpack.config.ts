@@ -187,6 +187,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
     .readFileSync(path.join(import.meta.dirname, entry.script), 'utf-8')
     .includes('@obfuscate');
   const script_filepath = path.parse(entry.script);
+<<<<<<< HEAD
   const is_status_bar_frontend = /[\\/](此间天地前端|0610前端)[\\/]/.test(entry.script);
   const use_module_output = !is_status_bar_frontend;
   const avoid_html_entity_minify = is_status_bar_frontend;
@@ -197,6 +198,13 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
           outputModule: true,
         }
       : {},
+=======
+
+  return (_env, argv) => ({
+    experiments: {
+      outputModule: true,
+    },
+>>>>>>> c5efcd76bf56ff7466cc36a0a02eea9e070a25de
     devtool: argv.mode === 'production' ? 'source-map' : 'eval-source-map',
     watchOptions: {
       ignored: ['**/dist', '**/node_modules'],
@@ -225,6 +233,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       asyncChunks: true,
       clean: true,
       publicPath: '',
+<<<<<<< HEAD
       ...(use_module_output
         ? {
             library: {
@@ -232,6 +241,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
             },
           }
         : {}),
+=======
+      library: {
+        type: 'module',
+      },
+>>>>>>> c5efcd76bf56ff7466cc36a0a02eea9e070a25de
     },
     module: {
       rules: [
@@ -433,7 +447,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
           new HtmlWebpackPlugin({
             template: path.join(import.meta.dirname, entry.html),
             filename: path.parse(entry.html).base,
+<<<<<<< HEAD
             scriptLoading: use_module_output ? 'module' : 'blocking',
+=======
+            scriptLoading: 'module',
+>>>>>>> c5efcd76bf56ff7466cc36a0a02eea9e070a25de
             cache: false,
           }),
           new HtmlInlineScriptWebpackPlugin(),
@@ -492,7 +510,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
           : [],
       ),
     optimization: {
+<<<<<<< HEAD
       minimize: !avoid_html_entity_minify,
+=======
+      minimize: true,
+>>>>>>> c5efcd76bf56ff7466cc36a0a02eea9e070a25de
       minimizer: [
         argv.mode === 'production'
           ? new TerserPlugin({
