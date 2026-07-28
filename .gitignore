@@ -1,0 +1,26 @@
+node_modules
+
+.DS_Store
+Thumbs.db
+
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+auto-imports.d.ts
+components.d.ts
+
+# 本地回滚备份（批次29 起不再入库，用 git 回滚为主）
+.backup/
+**/.backup/
+
+# 角色卡工作室：私密角色卡内容，不公开推送
+角色卡工作室/
+
+# 预设工作室：私密生图/酒馆预设内容（含个人聊天导出），不公开推送
+预设工作室/
+
+# tmp：临时脚本 + 角色卡解码明文（_ref_card.json 等），同属私密，不入库
+tmp/

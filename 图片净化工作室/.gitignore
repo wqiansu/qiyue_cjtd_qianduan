@@ -1,0 +1,6 @@
+# 打包产物 / Python 缓存
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
