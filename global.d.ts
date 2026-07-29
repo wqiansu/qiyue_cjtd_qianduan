@@ -42,6 +42,7 @@ declare module 'https://testingcf.jsdelivr.net/gh/StageDog/tavern_resource/dist/
     schema: z.ZodType<Record<string, any>> | (() => z.ZodType<Record<string, any>>),
   ): void;
 }
+<<<<<<< HEAD
 
 // 缺类型的 CDN/外部模块兜底声明(webpack externals 走 jsdelivr,node_modules 无装)。
 // lucide-static:图标名众多,用「简写环境模块」(整模块 any)允许任意 named import。
@@ -62,3 +63,5 @@ declare module '@floating-ui/dom' {
   export type Middleware = any;
   export type ComputePositionConfig = any;
 }
+=======
+>>>>>>> 3ee370304f725ffc74d481bb24331e890bad1641

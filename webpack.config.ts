@@ -187,6 +187,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
     .readFileSync(path.join(import.meta.dirname, entry.script), 'utf-8')
     .includes('@obfuscate');
   const script_filepath = path.parse(entry.script);
+<<<<<<< HEAD
   const is_status_bar_frontend = /[\\/]此间天地前端状态栏[\\/]/.test(entry.script);
   const use_module_output = !is_status_bar_frontend;
   const avoid_html_entity_minify = is_status_bar_frontend;
@@ -197,6 +198,13 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
           outputModule: true,
         }
       : {},
+=======
+
+  return (_env, argv) => ({
+    experiments: {
+      outputModule: true,
+    },
+>>>>>>> 3ee370304f725ffc74d481bb24331e890bad1641
     devtool: argv.mode === 'production' ? 'source-map' : 'eval-source-map',
     watchOptions: {
       ignored: ['**/dist', '**/node_modules'],
@@ -225,6 +233,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       asyncChunks: true,
       clean: true,
       publicPath: '',
+<<<<<<< HEAD
       ...(use_module_output
         ? {
             library: {
@@ -232,6 +241,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
             },
           }
         : {}),
+=======
+      library: {
+        type: 'module',
+      },
+>>>>>>> 3ee370304f725ffc74d481bb24331e890bad1641
     },
     module: {
       rules: [
@@ -433,7 +447,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
           new HtmlWebpackPlugin({
             template: path.join(import.meta.dirname, entry.html),
             filename: path.parse(entry.html).base,
+<<<<<<< HEAD
             scriptLoading: use_module_output ? 'module' : 'blocking',
+=======
+            scriptLoading: 'module',
+>>>>>>> 3ee370304f725ffc74d481bb24331e890bad1641
             cache: false,
           }),
           new HtmlInlineScriptWebpackPlugin(),
@@ -492,7 +510,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
           : [],
       ),
     optimization: {
+<<<<<<< HEAD
       minimize: !avoid_html_entity_minify,
+=======
+      minimize: true,
+>>>>>>> 3ee370304f725ffc74d481bb24331e890bad1641
       minimizer: [
         argv.mode === 'production'
           ? new TerserPlugin({
@@ -570,9 +592,23 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       const cdn = {
         sass: 'https://jspm.dev/sass',
       };
+<<<<<<< HEAD
       return callback(
         null,
         'module-import ' + (cdn[request as keyof typeof cdn] ?? `https://testingcf.jsdelivr.net/npm/${request}/+esm`),
+=======
+      const package_json = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'package.json'), 'utf-8')) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      const package_versions = { ...package_json.devDependencies, ...package_json.dependencies };
+      const version = package_versions[request]?.replace(/^[~^]/, '');
+      const versioned_request = /^[.\d]+$/.test(version) ? `${request}@${version}` : request;
+      return callback(
+        null,
+        'module-import ' +
+          (cdn[request as keyof typeof cdn] ?? `https://testingcf.jsdelivr.net/npm/${versioned_request}/+esm`),
+>>>>>>> 3ee370304f725ffc74d481bb24331e890bad1641
       );
     },
   });
