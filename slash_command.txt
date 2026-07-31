@@ -25,7 +25,10 @@
 /breakpoint // Set a breakpoint for debugging in the QR Editor.
 /bubble // 设置气泡聊天模式的消息样式。
 /buttons [labels=list] [multiple=true|false]?=false (string) // 显示带有指定文本和按钮的阻塞弹出窗口。 将点击的按钮标签返回到管道中，如果取消则返回空字符串。 Labels can be simple strings or objects with text, tooltip, and icon (Font Awesome class) properties. 例： /buttons labels=["Yes","No"] Do you want to continue? /buttons labels=[{"text":"Save","icon":"fa-floppy-disk","tooltip":"Save changes"},{"text":"Cancel"}] Choose an action
+<<<<<<< HEAD
 /caption [quiet=true|false]?=false [mesId=number]? [index=number]? (string)? // Caption an image with an optional prompt and passes the caption down the pipe. Only multimodal sources support custom prompts. Provide a message ID to get an image from a message instead of uploading one. Set the "quiet" argument to true to suppress sending a captioned message, default: false.
+=======
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /char-create [name=string] [description=string]? [firstMessage=string]? [personality=string]? [scenario=string]? [messageExamples=string]? [creatorNotes=string]? [systemPrompt=string]? [postHistoryInstructions=string]? [creator=string]? [characterVersion=string]? [tags=string]? [favorite=true|false]? [avatar=prompt|characters/...|backgrounds/...|User Avatars/...|assets/...|user/images/...]? [avatarPromptResize=true|false]?=true [talkativeness=number]? [world=string]? [depthPrompt=string]? [depthPromptDepth=number]? [depthPromptRole=user|assistant|system]? [select=true|false]?=true // Creates a new character with the specified attributes. Returns the avatar key of the created character. Required arguments: name - The character's name Note on tags: The tags argument sets character card tags (embedded in the character file), not SillyTavern's folder/filter tags. To add ST tags after creation, use /tag-add. To import card tags as ST tags, use /tag-import. Note on avatar: The avatar argument accepts prompt to open a file picker, or a local ST file path. Supported paths include: characters/Name.png, backgrounds/image.png, User Avatars/avatar.png, assets/category/file.png. This can also be the return value from the /imagine command. External URLs are not supported. 例： /char-create name="Alice" description="A friendly AI assistant" firstMessage="Hello! How can I help you today?" /char-create name="Bob" description="A wise wizard" firstMessage="Greetings, traveler." personality="Wise, patient" scenario="A magical library" favorite=true /char-create name="Clone" description="A clone" firstMessage="Hi!" avatar=prompt (opens file picker for avatar)
 /char-delete [char=string]? [deleteChats=true|false]?=false [silent=true|false]?=false // Deletes a character from the system. If no char argument is provided, deletes the currently selected character. 警告： 此操作不可撤销！ 例： /char-delete Deletes the currently selected character (will show confirmation popup). /char-delete char="Bob" deleteChats=true silent=true Deletes Bob and all associated chats without confirmation.
 /char-duplicate [char=string]? [select=true|false]?=false // Duplicates a character. Returns the avatar key of the duplicated character. Use /char-update afterwards to modify the duplicated character's fields. 例： /char-duplicate 复制所选角色。 /char-duplicate char="Alice" select=true Duplicates Alice and selects the new character. /char-duplicate | /setvar key=newChar | /char-update char="{{getvar::newChar}}" name="Clone" Duplicates the current character and renames the clone.
@@ -61,10 +64,14 @@
 /db-disable [source=global|character|chat]? (string) // Disable an attachment in the Data Bank by its name or URL. Optionally, provide the source of the attachment.
 /db-enable [source=global|character|chat]? (string) // Enable an attachment in the Data Bank by its name or URL. Optionally, provide the source of the attachment.
 /db-get [source=global|character|chat]? (string) // Get attachment text from the Data Bank. Either provide the name or URL of the attachment. Optionally, provide the source of the attachment.
+<<<<<<< HEAD
 /db-ingest // Force the ingestion of all Data Bank attachments.
 /db-list [source=global|character|chat]? [field=name|url]?=url // List attachments in the Data Bank as a JSON-serialized array. Optionally, provide the source of the attachments and the field to list by.
 /db-purge // Purge the vector index for all Data Bank attachments.
 /db-search [threshold=number]? [count=number]? [source=global|character|chat]? [return=chunks|pipe|object|toast-html|toast-text|console|none]?=object (string) // Search the Data Bank for a specific query using vector similarity. Returns a list of file URLs with the most relevant content.
+=======
+/db-list [source=global|character|chat]? [field=name|url]?=url // List attachments in the Data Bank as a JSON-serialized array. Optionally, provide the source of the attachments and the field to list by.
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /db-update [source=global|character|chat]?=chat [name=string]? [url=string]? (string) // Update an attachment in the Data Bank, preserving its name. Returns a new URL of the attachment.
 /decglobalvar (varname) // Decrement a global variable by 1 and pass the result down the pipe. Example: /decglobalvar score
 /decvar (varname) // Decrement a local variable by 1 and pass the result down the pipe. Example: /decvar score
@@ -78,6 +85,7 @@
 /ejs [ctx=dictionary]? [block=dictionary]? (string) // Execute template code
 /ejs-refresh // Preload world info
 /event-emit [event=string] [...data=string]? // 发送 `event` 事件, 同时可以发送一些数据. 所有正在监听该消息频道的 listener 函数都会自动运行, 并能用函数参数接收发送来的数据. 由于酒馆 STScript 输入方式的局限性, 所有数据将会以字符串 string 类型接收; 如果需要 number 等类型, 请自行转换. Example: /event-emit event="读档" /event-emit event="存档" data={{getvar::数据}} data=8 data=你好 {{user}} /event-emit event="随便什么名称" data="这是一个 数据" data={{user}}
+<<<<<<< HEAD
 /expression-classify [api=local|extras|llm|webllm|none]? [filter=true|false]?=true [prompt=string]? (string) // Performs an emotion classification of the given text and returns a label. Allows to specify which Classifier API to perform the classification with. Example: /classify I am so happy today!
 /expression-fallback (string)? // Gets the currently selected expression fallback for all characters. If a valid expression label is sent, it will be set as the new fallback. Example: /expression-fallback | /echo Returns the currently selected fallback. /expression-fallback admiration Sets a new expression as fallback.
 /expression-folder-override [name=string]? (string)? // Sets an override sprite folder for the current character. In groups, this will apply to the character who last sent a message. If the name starts with a slash or a backslash, selects a sub-folder in the character-named folder. Empty value to reset to default.
@@ -85,6 +93,8 @@
 /expression-list [return=pipe|object|toast-html|toast-text|console|none]?=pipe [filter=true|false]?=true // Returns a list of available expressions, including custom expressions.
 /expression-set [type=expression|sprite]?=expression (string) // Force sets the expression for the current character.
 /expression-upload [name=string]? [label=string] [folder=string]? [spriteName=string]? (string) // Upload a sprite from a URL. Example: /uploadsprite name=Seraphina label=joy /user/images/Seraphina/Seraphina_2024-12-22@12h37m57s.png
+=======
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /extension-disable [reload=true|false]?=true (string) // Disables a specified extension. By default, the page will be reloaded automatically, stopping any further commands. If reload=false named argument is passed, the page will not be reloaded, and the extension will stay enabled until refreshed. The page either needs to be refreshed, or /reload-page has to be called. Example: /extension-disable Summarize
 /extension-enable [reload=true|false]?=true (string) // Enables a specified extension. By default, the page will be reloaded automatically, stopping any further commands. If reload=false named argument is passed, the page will not be reloaded, and the extension will stay disabled until refreshed. The page either needs to be refreshed, or /reload-page has to be called. Example: /extension-enable Summarize
 /extension-exists (string) // Checks if a specified extension exists. Example: /extension-exists SillyTavern-LALib
@@ -111,10 +121,13 @@
 /go (string) // 用它的名称打开与角色或群聊的聊天
 /hide [name=string]? (number|range)? // 从提示词中隐藏聊天消息。
 /if [left=varname|string|number] [right=varname|string|number]? [rule=eq|neq|in|nin|gt|gte|lt|lte|not]?=eq [else=closure|subcommand]? (closure|subcommand) // Compares the value of the left operand a with the value of the right operand b, and if the condition yields true, then execute any valid slash command enclosed in quotes and pass the result of the command execution down the pipe. Numeric values and string literals for left and right operands supported. If the rule is not provided, it defaults to eq. If no right operand is provided, it defaults to checking the left value to be truthy. A non-empty string or non-zero number is considered truthy, as is the value true or on. Only acceptable rules for no provided right operand are not, and no provided rule - which default to returning whether it is not or is truthy. Available rules: eq => a == b (strings & numbers) neq => a !== b (strings & numbers) in => a includes b (strings & numbers as strings) nin => a not includes b (strings & numbers as strings) gt => a > b (numbers) gte => a >= b (numbers) lt => a < b (numbers) lte => a <= b (numbers) not => !a (truthy) Examples: /if left=score right=10 rule=gte "/speak You win" triggers a /speak command if the value of "score" is greater or equals 10. /if left={{lastMessage}} rule=in right=surprise {: /echo SURPISE! :} executes a subcommand defined as a closure if the given value contains a specified word. /if left=myContent {: /echo My content had some content. :} executes the defined subcommand, if the provided value of left is truthy (contains some kind of contant that is not empty or false) /if left=tree right={{getvar::object}} {: /echo The object is a tree! :} executes the defined subcommand, if the left and right values are equals.
+<<<<<<< HEAD
 /imagine [quiet=true|false]?=false [gallery=true|false]?=true [negative=string]? [extend=true|false]? [edit=true|false]? [multimodal=true|false]? [snap=true|false]? [processing=standard|minimal]? [seed=number]? [width=number]? [height=number]? [steps=number]? [cfg=number]? [skip=number]? [model=string]? [sampler=string]? [scheduler=string]? [vae=string]? [upscaler=string]? [hires=true|false]? [scale=number]? [denoise=number]? [2ndpass=number]? [faces=true|false]? (you|me|scene|raw_last|last|face|background)? // Requests to generate an image and posts it to chat (unless quiet=true argument is specified). The image is saved to the character gallery by default; use gallery=false to save to the root of the user images directory. Supported arguments: you, me, scene, raw_last, last, face, background. Anything else would trigger a "free mode" to make generate whatever you prompted. Example: /imagine apple tree would generate a picture of an apple tree. Returns a link to the generated image.
 /imagine-comfy-workflow (string) // (workflowName) - change the workflow to be used for image generation with ComfyUI, e.g. /imagine-comfy-workflow MyWorkflow
 /imagine-source (string)? // If an argument is provided, change the source of the image generation, e.g. /imagine-source comfy. Returns the current source.
 /imagine-style (string)? // If an argument is provided, change the style of the image generation, e.g. /imagine-style MyStyle. Returns the current style.
+=======
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /impersonate [await=true|false]?=false (string)? // 调用冒充响应，带有可选的附加提示词。 如果传递了 await=true 命名参数，命令将在继续之前等待冒充结束。 例： /impersonate What is the meaning of life?
 /import [from=string] (...string) // Import one or more closures from another Quick Reply. Only imports closures that are directly assigned a scoped variable via /let or /var. Examples: /import from=LibraryQrSet.FooBar foo | /:foo /import from=LibraryQrSet.FooBar foo bar | /:foo | /:bar /import from=LibraryQrSet.FooBar foo as x bar as y | /:x | /:y
 /incglobalvar (varname) // Increment a global variable by 1 and pass the result down the pipe. Example: /incglobalvar score
@@ -128,7 +141,10 @@
 /is-mobile // 如果当前设备是移动设备，则返回 true，否则返回 false。等同于 {{isMobile}} 宏。
 /len (string|number|list|dictionary) // Gets the length of a value and passes the result down the pipe. For strings, returns the number of characters. For lists and dictionaries, returns the number of elements. For numbers, returns the number of digits (including the sign and decimal point). Example: /len Lorem ipsum | /echo
 /let [key=varname]? (varname)? (string|number|bool|list|dictionary|closure)? // Declares a new variable in the current scope. Examples: /let x foo bar | /echo {{var::x}} /let key=x foo bar | /echo {{var::x}} /let y
+<<<<<<< HEAD
 /list-gallery [char=string]? [group=string]? // List images in the gallery of the current char / group or a specified char / group.
+=======
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /listinjects [return=object|chat-html|popup-html|toast-html|console|none]?=popup-html // 列出当前聊天的所有脚本注入。默认在弹窗中显示注入内容。使用 return 参数来更改返回类型。
 /listvar [scope=all|local|global]?=all [return=object|chat-html|popup-html|toast-html|console|none]?=popup-html // List registered chat variables. Displays variables in a popup by default. Use the return argument to change the return type.
 /loader-hide [handle=string]? // Hides an action loader that was shown with /loader-show. If no handle is provided, hides all active loaders. Example: /loader-hide handle={{getvar::myLoader}}
@@ -243,18 +259,27 @@
 /setinput (string) // 将用户输入设置为指定文本，并通过管道将其传递给下一条命令。 例： /setinput Hello world
 /setpromptentry [...identifier=string|list]? [...name=string|list]? (on|off|toggle)=toggle // 开启或关闭指定的提示词管理器条目。
 /setvar [key=varname] [index=number|string]? [as=string]?=string (string|number|bool|list|dictionary) // Set a local variable value and pass it down the pipe. The index argument is optional. To convert the value to a specific JSON type when using index, use the as argument. Example: /setvar key=color green /setvar key=ages index=John as=number 21
+<<<<<<< HEAD
 /show-gallery // Shows the gallery.
 /sin (number|varname) // Performs a sine operation of a value and passes the result down the pipe. Can use variable names. Example: /sin i
 /single // 设置消息样式为单文档样式，不显示名称或头像。
 /sort [keysort=true|false]?=true (string|number|list|dictionary) // Sorts a list or dictionary in ascending order and passes the result down the pipe. For lists, returns the list sorted by value. For dictionaries, returns the ordered list of keys after sorting. Setting keysort=false means keys are sorted by associated value. Examples: /sort [5,3,4,1,2] | /echo /sort keysort=false {"a": 1, "d": 3, "c": 2, "b": 5} | /echo
 /speak [voice=string]? (string) // Narrate any text using currently selected character's voice. Use voice="Character Name" argument to set other voice from the voice map. Example: /speak voice="Donald Duck" Quack!
+=======
+/sin (number|varname) // Performs a sine operation of a value and passes the result down the pipe. Can use variable names. Example: /sin i
+/single // 设置消息样式为单文档样式，不显示名称或头像。
+/sort [keysort=true|false]?=true (string|number|list|dictionary) // Sorts a list or dictionary in ascending order and passes the result down the pipe. For lists, returns the list sorted by value. For dictionaries, returns the ordered list of keys after sorting. Setting keysort=false means keys are sorted by associated value. Examples: /sort [5,3,4,1,2] | /echo /sort keysort=false {"a": 1, "d": 3, "c": 2, "b": 5} | /echo
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /sqrt (number|varname) // Performs a square root operation of a value and passes the result down the pipe. Can use variable names. Example: /sqrt i
 /start-reply-with [force=true|false]?=false (string)? // Sets a "Start Reply With". Gets the current value if no value is provided. Use a "force" argument to force set an empty value. Examples: Set the field value: /start-reply-with Sure! Force set an empty value: /start-reply-with force="true" {{noop}}
 /stop // 若当前正在运行，则停止所有生成和流式传输。 注意：此命令无法从聊天输入执行，因为在生成期间会阻止从那里发送任何消息或脚本。但它可以通过自动化或 QR 脚本/按钮执行。
 /stop-strings [force=true|false]?=false (list)? // Sets a list of custom stopping strings. Gets the list if no value is provided. Use a "force" argument to force set an empty value. Examples: Force set an empty value: /stop-strings force="true" {{noop}} Value must be a JSON-serialized array: /stop-strings ["goodbye", "farewell"] Pipe characters must be escaped with a backslash: /stop-strings ["left\|right"]
 /sub (...number|varname|list) // Performs a subtraction of the set of values and passes the result down the pipe. Can use variable names, or a JSON array consisting of numbers and variables (with quotes). Example: /sub i 5 /sub ["count", 4, "i"]
 /substr [start=number]? [end=number]? (string) // 从提供的字符串中提取文本。 如果省略 start，则视为 0。 如果 start < 0，则从字符串末尾开始计数。 如果 start >= 字符串长度，则返回空字符串。 如果省略 end，或者 end >= 字符串长度，则提取到字符串末尾。 如果 end < 0，则从字符串末尾开始计数。 如果归一化负值后 end <= start，则返回空字符串。 例： /let x The morning is upon us.     || /substr start=-3 {{var::x}}         | /echo  |/# us.                    || /substr start=-3 end=-1 {{var::x}}  | /echo  |/# us                     || /substr end=-1 {{var::x}}           | /echo  |/# The morning is upon us || /substr start=4 end=-1 {{var::x}}   | /echo  |/# morning is upon us     ||
+<<<<<<< HEAD
 /summarize [source=extras|main|webllm]? [prompt=string]? [quiet=true|false]?=false (string)? // Summarizes the given text. If no text is provided, the current chat will be summarized. Can specify the source and the prompt to use.
+=======
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /swipe [direction=right|left]?=right [await=true|false]?=false // Swipes the latest reply. Defaults to direction=right; use direction=left to go to the previous reply. If no next swipe exists, behavior depends on message context. If await=true named argument is passed, the command will await for the swipe action before proceeding.
 /sys [compact=true|false]?=false [at=number]? [name=string]? [return=pipe|object|toast-html|toast-text|console|none]?=none [raw=true|false]?=true (string) // 作为系统旁白发送消息。 如果 compact 设置为 true，则使用紧凑布局发送消息。 例： /sys The sun sets in the west. /sys compact=true A brief note.
 /sysgen [trim=true|false]?=false [compact=true|false]?=false [at=number]? [name=string]? [return=pipe|object|toast-html|toast-text|console|none]?=none (string) // 使用指定提示词生成系统消息。
@@ -278,7 +303,10 @@
 /tools-list [return=pipe|object|toast-html|toast-text|console|none]?=none // Gets a list of all registered tools in the OpenAI function JSON format. Use the return argument to specify the return value type.
 /tools-register [name=string] [description=string] [parameters=dictionary] [displayName=string]? [formatMessage=closure] [shouldRegister=closure]? [stealth=true|false]?=false (closure) // Registers a new tool with the tool registry. The parameters argument MUST be a JSON-serialized object with a valid JSON schema. The unnamed argument MUST be a closure that accepts the function parameters as local script variables. See json-schema.org and OpenAI Function Calling for more information. Example: /let key=echoSchema { "$schema": "http://json-schema.org/draft-04/schema#", "type": "object", "properties": { "message": { "type": "string", "description": "The message to echo." } }, "required": [ "message" ] } || /tools-register name=Echo description="Echoes a message. Call when the user is asking to repeat something" parameters={{var::echoSchema}} {: /echo {{var::arg.message}} :}
 /tools-unregister (string) // Unregisters a tool from the tool registry.
+<<<<<<< HEAD
 /translate [target=af|sq|am|ar|hy|az|eu|be|bn|bs|bg|ca|ceb|zh-CN|zh-TW|co|hr|cs|da|nl|en|eo|et|fi|fr|fy|gl|ka|de|el|gu|ht|ha|haw|iw|hi|hmn|hu|is|ig|id|ga|it|ja|jw|kn|kk|km|ko|ku|ky|lo|la|lv|lt|lb|mk|mg|ms|ml|mt|mi|mr|mn|my|ne|no|ny|ps|fa|pl|pt-PT|pt-BR|pa|ro|ru|sm|gd|sr|st|sn|sd|si|sk|sl|so|es|su|sw|sv|tl|tg|ta|te|th|tr|uk|ur|uz|vi|cy|xh|yi|yo|zu]? [provider=string]? (string) // Translate text to a target language. If target language is not provided, the value from the extension settings will be used.
+=======
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /trigger [await=true|false]?=false (number|string)? // 触发消息生成。如果在群聊中，可以为指定索引或名字的群成员触发消息。 如果传递了 await=true 命名参数，命令将在继续之前等待触发的生成。
 /trimend (string) // 将文本修剪到最后一个完整句子的末尾。
 /trimstart (string) // 将文本修剪到第一个完整句子的开头。 例： /trimstart This is a sentence. And here is another sentence.
@@ -287,12 +315,15 @@
 /unlockbg // Unlocks a background for the currently selected chat
 /upper (string) // 将提供的字符串转换为大写。
 /var [key=varname]? [index=number]? [as=string]?=string (varname)? (string|number|bool|list|dictionary|closure)? // Get or set a variable. Use index to access elements of a JSON-serialized list or dictionary. To convert the value to a specific JSON type when using with index, use the as argument. Examples: /let x foo | /var x foo bar | /var x | /echo /let x foo | /var key=x foo bar | /var x | /echo /let x {} | /var index=cool as=number x 1337 | /echo {{var::x}}
+<<<<<<< HEAD
 /vector-chats-state (true|false)? // Set whether chat vectorization is enabled or return the current boolean if no argument is provided
 /vector-files-state (true|false)? // Set whether file vectorization is enabled or return the current boolean if no argument is provided
 /vector-max-entries (number)? // Set the vector world info max entries or returns the current max entries if no argument is provided
 /vector-query (number)? // Set the vector query messages or returns the current query messages count if no argument is provided
 /vector-threshold (number)? // Set the vector score threshold or return the current threshold if no argument is provided.
 /vector-worldinfo-state (true|false)? // Set whether world info vectorization is enabled or return the current boolean if no argument is provided
+=======
+>>>>>>> d3edc570be82dfef999b800e6b45a51d0863a025
 /vn // Swaps Visual Novel Mode On/Off
 /while [left=varname|string|number] [right=varname|string|number]? [rule=eq|neq|in|nin|gt|gte|lt|lte|not]?=eq [guard=on|off]?=off (closure|subcommand) // Compares the value of the left operand a with the value of the right operand b, and if the condition yields true, then execute any valid slash command enclosed in quotes. Numeric values and string literals for left and right operands supported. Available rules: eq => a == b (strings & numbers) neq => a !== b (strings & numbers) in => a includes b (strings & numbers as strings) nin => a not includes b (strings & numbers as strings) gt => a > b (numbers) gte => a >= b (numbers) lt => a < b (numbers) lte => a <= b (numbers) not => !a (truthy) Examples: /setvar key=i 0 | /while left=i right=10 rule=lte "/addvar key=i 1" adds 1 to the value of "i" until it reaches 10. /while left={{getvar::currentword}} {: /setvar key=currentword {: /do-something-and-return :}() | /echo The current work is "{{getvar::currentword}}" :} executes the defined subcommand as long as the "currentword" variable is truthy (has any content that is not false/empty) Loops are limited to 100 iterations by default, pass guard=off to disable.
 /wi-get-timed-effect [file=string] [effect=string] [format=bool|number]?=bool (string) // Get the current state of the timed effect for the record with the UID from the specified book. Example: /wi-get-timed-effect file=chatLore format=bool effect=sticky 123 - returns true or false if the effect is active or not /wi-get-timed-effect file=chatLore format=number effect=sticky 123 - returns the remaining duration of the effect, or 0 if inactive
