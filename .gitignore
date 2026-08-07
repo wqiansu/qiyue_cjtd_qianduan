@@ -11,6 +11,7 @@ pnpm-debug.log*
 
 auto-imports.d.ts
 components.d.ts
+<<<<<<< HEAD
 
 # 本地回滚备份（批次29 起不再入库，用 git 回滚为主）
 .backup/
@@ -24,3 +25,5 @@ components.d.ts
 
 # tmp：临时脚本 + 角色卡解码明文（_ref_card.json 等），同属私密，不入库
 tmp/
+=======
+>>>>>>> 9072edeaaddd1166c92d20e75542e4d14d4fdbc2
