@@ -11,8 +11,13 @@
     ],
     "target": "ESNext",
     "module": "ESNext",
+<<<<<<< HEAD
     "outDir": "dist",
     "baseUrl": ".",
+=======
+    "rootDir": ".",
+    "outDir": "dist",
+>>>>>>> c6777179271f97bed734047fcdd7a3d0067157ec
     "paths": {
       "@util/*": [
         "./util/*"
@@ -29,7 +34,10 @@
     "allowJs": true,
     "checkJs": false,
     "sourceMap": true,
+<<<<<<< HEAD
     "skipLibCheck": true,
+=======
+>>>>>>> c6777179271f97bed734047fcdd7a3d0067157ec
     "strict": true,
     "jsx": "react-jsx",
     "noUnusedLocals": true,
@@ -50,7 +58,10 @@
   "exclude": [
     "**/dist/**",
     "**/node_modules/**",
+<<<<<<< HEAD
     "src/0615悬浮球",
     "src/此间天地前端状态栏",
+=======
+>>>>>>> c6777179271f97bed734047fcdd7a3d0067157ec
   ]
 }
