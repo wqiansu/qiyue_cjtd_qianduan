@@ -1,10 +1,3 @@
-// 世界套件 —— 日记（diary）模块（diary.ts）
-// 三栏 master-detail（.thw-diary-app2）：左导航(条目列表+搜索+心情筛选) /
-//   中主区(阅读 / 编辑，仿纸感日记本) / 右检视(AI 助手：代笔/续写/润色/要点 + 心情轨迹 + 关键词云).
-// 真实感：仿真实日记 App——纸感书页、心情天气头、私密锁、关联跳转（日历/联系人）。
-// 增强：①心情系统(5档) ②多提示词特化(角色POV/代笔/续写/润色/要点) ③强私域(锁日记不进同步)
-//   ④情色向适配(eco色情/日常度) ⑤角色互写 ⑥联动日历种子.
-// 设置：上下文与世界书 / API利用 / 功能提示词(破限置顶) / 生态浓度 / 日记专属 / 自动触发 / 记忆与数据。
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { getRoot } from '../../lib/tavern-api';
 import { openModal2 } from '../../status-bar-init';
@@ -283,7 +276,6 @@ registerInjectPlan({
 });
 
 function diaryJailbreak(): string { return (getPromptText('diary.jailbreak') || '').trim(); }
-// 生态浓度 → 给 AI 的逐条调校（通用化读设置，不写死提示词）。
 function ecoDirective(): string {
   const s = getDiarySettings();
   const lvl = (n: number, v0: string, v1: string, v2: string, v3: string, v4: string) => n < 40 ? v0 : n < 80 ? v1 : n < 120 ? v2 : n < 160 ? v3 : v4;
@@ -340,6 +332,7 @@ function snapshotEditDraft(): void {
   };
 }
 let _seedText = '';   // 来自日历的当日素材种子（代笔今日用）
+let _ghostTimer: ReturnType<typeof setTimeout> | null = null;
 
 function worldInfoBlock(): string {
   const s = getDiarySettings();
@@ -1071,13 +1064,17 @@ function openApp(): void {
   render();
   maybeAutoTrigger();
 }
-export function openDiary(): void { _center = { name: 'empty' }; _sheet = null; _showSettings = false; _filterTag = null; _filterAuthor = null; _filterMood = null; _searchQ = ''; openApp(); }
+export function openDiary(): void {
+  if (_ghostTimer) { clearTimeout(_ghostTimer); _ghostTimer = null; }
+  _center = { name: 'empty' }; _sheet = null; _showSettings = false; _filterTag = null; _filterAuthor = null; _filterMood = null; _searchQ = ''; openApp();
+}
 // 供日历「生成今日日记」联动：带当日素材种子打开日记并直接代笔。
 export function openDiaryWithSeed(p: { dateLabel?: string; seed?: string }): void {
   _seedText = p.seed || '';
   openDiary();
   // 打开后直接代笔今日（用种子）
-  setTimeout(() => { void genGhost(); }, 60);
+  if (_ghostTimer) clearTimeout(_ghostTimer);
+  _ghostTimer = setTimeout(() => { _ghostTimer = null; void genGhost(); }, 60);
 }
 
 registerWorldApp({

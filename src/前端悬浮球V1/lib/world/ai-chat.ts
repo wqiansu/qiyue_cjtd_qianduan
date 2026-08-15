@@ -1,9 +1,3 @@
-// 世界套件 · 通用对话生成流（ai-chat.ts）
-// 职责：所有 APP 共用的「组 system（人格+设定+记忆）+ user（历史+新输入+可选正文）→ generate」流。
-//   - 复用 resolveGenerateApiConfig（API 预设两维度正交，与 ai-summarize 同口径）。
-//   - 复用 generateRaw + ordered_prompts，绕开酒馆 RP 预设/绑定世界书（精确控上下文）。
-//   - 提供 makeSummarizer()：给 memory.ts 的注入式 summarize 用（记忆压缩走同一 generate 通道）。
-//   - 提供 readTavernFloors()：可选读取酒馆正文最近 N 楼（每 APP 自定义读不读/读几楼）。
 import { resolveWorldApiConfig } from './world-api';
 import { getRoot } from '../tavern-api';
 import { buildMemoryContext, appendTurn, runShortSummary, ensureSession, migrateSessionToPool, buildPoolContext, type MemRole, type MemSummarizer } from './memory';
@@ -42,10 +36,6 @@ function getAppWbKeys(appId: string): string[] {
   try { const g = _appWbKeyGetters.get(appId); return g ? (g() || []) : []; } catch (e) { void e; return []; }
 }
 
-// 全局横切设置（互动用户性别 / 图片描述字数）的统一注入。
-//   设计：不改各 app 写死的 prompt 文案，而是在 chatGenerate 统一层按需追加一段「全局设置（优先级最高）」，
-//   这样玩家在总体设置里改一次，所有走 chatGenerate 的 app（含浏览器）下一轮生成立即生效。
-//   仅当玩家把设置改离默认值时才追加，默认（全女 + 20-60字）下零副作用。
 function buildGlobalCrosscut(): string {
   const cfg = getWorldConfig();
   const parts: string[] = [];

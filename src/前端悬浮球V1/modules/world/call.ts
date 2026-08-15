@@ -1,6 +1,3 @@
-// 世界套件 · 通话（call）— 单 modal SPA
-// 模拟电话：通话记录列表 → 进入与某角色的「通话」逐句文字对话（无 TTS，纯文字剧情）。
-// 复用记忆引擎（sessionReply）保持跨次通话连贯。架构同其它 APP：单 modal + _view + 底部 sheet。
 import { esc, qs } from '../../lib/dom-utils';
 import { getRoot } from '../../lib/tavern-api';
 import { openModal2 } from '../../status-bar-init';
@@ -83,13 +80,12 @@ function avatar(name: string): string {
 
 // ==================== 状态机 ====================
 type ViewState = { name: 'list' } | { name: 'dialing'; recordId: string } | { name: 'incall'; recordId: string };
-// 提示词 sheet（列表 + 就地编辑，复用共享 promptListPanelHtml/promptEditPanelHtml/bindPromptPanelClick），
-//   让玩家可查看/编辑 call.jailbreak / call.talk。
 type SheetState = { kind: 'pick' } | { kind: 'prompts' } | { kind: 'prompt'; id: string } | { kind: 'settings' } | null;
 
 let _view: ViewState = { name: 'list' };
 let _sheet: SheetState = null;
 let _callStart = 0;                 // 本次通话开始时间戳（算时长）
+let _dialTimer: ReturnType<typeof setTimeout> | null = null;
 
 function sessionIdOf(rec: CallRecord): string { return `call_${rec.id}`; }
 function contactOf(rec: CallRecord): WorldContact | undefined {
@@ -187,7 +183,6 @@ function pickInnerHtml(): string {
   </div>`;
 }
 
-// 通话设置面板（上下文/世界书 · 生成节奏 · 记忆 · 注入正文 · API · 数据）
 function settingsInnerHtml(): string {
   const s = getCallSettings();
   const wbReady = isWorldbookAvailable();
@@ -234,41 +229,39 @@ function render(): void {
     const ln = root.querySelector('.th-cl-lines') as HTMLElement | null;
     if (ln) ln.scrollTop = ln.scrollHeight;
   }
-  // 提示词编辑：绑定「绑定世界书」选择器（复用共享 bindPromptWbHost）
   if (_sheet && _sheet.kind === 'prompt') {
     const host = root.querySelector('.th-cl-sheet-content') as HTMLElement | null;
     if (host) bindPromptWbHost(host);
   }
-  // 设置页的「绑定世界书」复选器
   if (_sheet && _sheet.kind === 'settings' && isWorldbookAvailable()) {
     const host = root.querySelector('[data-cl-wbpick-host]') as HTMLElement | null;
     if (host) bindWbPicker(host, () => getCallSettings().worldbookEntryKeys || [], (keys) => updateCallSettings({ worldbookEntryKeys: keys }));
   }
 }
-function go(v: ViewState): void { _view = v; _sheet = null; render(); }
+function go(v: ViewState): void {
+  if (_view.name === 'dialing' && v.name !== 'dialing' && _dialTimer) { clearTimeout(_dialTimer); _dialTimer = null; }
+  _view = v; _sheet = null; render();
+}
 function openSheet(s: NonNullable<SheetState>): void { _sheet = s; render(); }
 function closeSheet(): void { _sheet = null; render(); }
 
 // ==================== 通话流程 ====================
-// 发起拨号：建/取记录 → 拨号动画 → 接通 → 对方先开口（AI）
 function startCall(contactId: string): void {
   const c = getContacts().find(x => x.id === contactId);
   if (!c) return;
   const rec = ensureRecord({ contactId: c.id, peerName: c.name });
-  // 确保记忆会话存在
   ensureSession({ id: sessionIdOf(rec), appId: APP_ID, appName: '通话', title: `与${c.name}通话`, contactId: c.id });
   go({ name: 'dialing', recordId: rec.id });
-  // 短暂拨号后接通
-  setTimeout(() => {
-    if (_view.name !== 'dialing' || _view.recordId !== rec.id) return;
+  if (_dialTimer) clearTimeout(_dialTimer);
+  _dialTimer = setTimeout(() => {
+    if (_view.name !== 'dialing' || _view.recordId !== rec.id) { _dialTimer = null; return; }
+    _dialTimer = null;
     _callStart = Date.now();
     go({ name: 'incall', recordId: rec.id });
-    // 对方先开口（用一个隐含的「接起电话」动作触发）
     peerSpeak(rec.id, '（对方接起了电话）你好，是我。', true);
   }, 1200);
 }
 
-// 对方说话：走 sessionReply（记忆连贯）。firstTurn=true 时用「接电话」语境引导开场。
 async function peerSpeak(recordId: string, userText: string, firstTurn = false): Promise<void> {
   if (_busy) return;
   const rec = getRecord(recordId);
@@ -340,7 +333,6 @@ function bindRoot(): void {
     }
     const rec = t.closest('[data-cl-rec]') as HTMLElement | null;
     if (rec) {
-      // 点记录进入通话中（续聊），无拨号动画
       const r = getRecord(rec.getAttribute('data-cl-rec') || '');
       if (r) { ensureSession({ id: sessionIdOf(r), appId: APP_ID, appName: '通话', title: `与${r.peerName}通话`, contactId: r.contactId }); _callStart = Date.now(); go({ name: 'incall', recordId: r.id }); }
       return;
@@ -373,7 +365,6 @@ function bindRoot(): void {
     const t = ev.target as HTMLElement;
     if (!t) return;
     if (t.classList.contains('th-cl-pick-floors')) { updateCallSettings({ useFloors: (t as HTMLInputElement).checked }); return; }
-    // 设置页各项即时落库
     if (t.classList.contains('th-cl-set-floors')) { updateCallSettings({ useFloors: (t as HTMLInputElement).checked }); return; }
     if (t.classList.contains('th-cl-set-floorcount')) { updateCallSettings({ floorCount: Math.max(1, Math.min(30, Number((t as HTMLInputElement).value) || 6)) }); return; }
     if (t.classList.contains('th-cl-set-bubbles')) { updateCallSettings({ maxBubbles: Math.max(1, Math.min(20, Number((t as HTMLInputElement).value) || 4)) }); return; }
@@ -383,12 +374,10 @@ function bindRoot(): void {
 
 function onSheetClick(t: HTMLElement, ev: Event): boolean {
   if (!_sheet) return false;
-  // 设置页——清空数据（点击不关闭 sheet）
   if (_sheet.kind === 'settings') {
     if (t.closest('[data-cl-clear]')) { void thConfirm({ title: '清空通话记录', message: '删除全部通话记录？设置保留。不可恢复。', danger: true, confirmText: '清空' }).then(ok => { if (ok) { clearAll(); render(); thToast('已清空通话记录', 'success'); } }); return true; }
-    if (t.closest('[data-cl-wbpick-host]')) return true;   // 世界书复选器内点击不关闭
+    if (t.closest('[data-cl-wbpick-host]')) return true;
   }
-  // 提示词列表/编辑：交给共享处理器（编辑内点击不关闭 sheet）
   if (_sheet.kind === 'prompts' || _sheet.kind === 'prompt') {
     const r = bindPromptPanelClick(ev);
     if (r) {
@@ -397,7 +386,6 @@ function onSheetClick(t: HTMLElement, ev: Event): boolean {
       if (r.action === 'saved' || r.action === 'reset') { openSheet({ kind: 'prompts' }); return true; }
       return true;
     }
-    // 点在提示词编辑区内（AI 重写块被消费）→ 不关闭 sheet
     if (t.closest('.th-wapp-pe') || t.closest('.th-wapp-pl')) return true;
   }
   if (t.classList?.contains('th-cl-sheet-mask') || t.closest('.th-cl-sheet-x')) { closeSheet(); return true; }
@@ -428,14 +416,13 @@ function openApp(): void {
 export function openCall(contactId?: string): void {
   _view = { name: 'list' }; _sheet = null; _callStart = 0;
   openApp();
-  // 从微信通话邀请跳入：直接拨给该联系人
   if (contactId && getContacts().some(x => x.id === contactId)) { startCall(contactId); }
 }
 
 registerWorldApp({
   id: 'call', name: '通话', icon: 'fa-phone',
   accent: 'linear-gradient(135deg,#22c55e,#16a34a)', order: 80, open: openCall,
-  wbKeys: () => getCallSettings().worldbookEntryKeys || [],   // 绑定世界书→生成时集中注入
+  wbKeys: () => getCallSettings().worldbookEntryKeys || [],
 });
 
 try {

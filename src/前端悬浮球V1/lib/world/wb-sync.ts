@@ -1,12 +1,5 @@
-// 世界书记忆同步层（wb-sync.ts）
-// 各 APP 的历史/记忆写入「角色卡主世界书」，让酒馆正文也能读到（取代脆弱的「inject 到正文楼层」）。
-//   - 写入目标：角色卡 primary 世界书（这样状态栏自带的世界书工具也能管理）；无 primary 时自动新建并绑定。
-//   - 每 APP / 每记忆类型可配置：蓝灯(constant)/绿灯(selective)、绿灯关键字、插入位置、深度、顺序，并给一套默认。
-//   - 强制约束（不暴露给玩家）：所有同步条目 prevent_incoming + prevent_outgoing（禁止递归与被递归）。
-//   - tri-state：每 APP 可选 仅世界书 / 仅 inject 正文楼层 / 两者都开 / 关闭；默认 仅世界书。
-//   - 条目用 extra.thWorldSync 标记 {appId, memType, key}，便于管理界面可靠识别（不依赖条目名）。
-// 全部 window→getRoot 兜底；失败一律降级、绝不 throw 出界。纯数据/接口层，不碰 DOM。
 import { getRoot, safeGetCharWorldbookNames } from '../tavern-api';
+import { clearEntryCache } from './worldbook';
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 import { injectWorldOnce } from './ai-chat';
 
@@ -138,6 +131,7 @@ export async function syncToWorldbook(args: {
       if (idx >= 0) { wb[idx] = { ...wb[idx], ...patch }; return wb; }
       return [...wb, patch];
     }, { render: 'debounced' });
+    clearEntryCache();
     return true;
   } catch (e) { void e; return false; }
 }
@@ -213,6 +207,7 @@ export async function setSyncEntryEnabled(memKey: string, enabled: boolean): Pro
       if (idx >= 0) wb[idx] = { ...wb[idx], enabled };
       return wb;
     }, { render: 'debounced' });
+    clearEntryCache();
     return true;
   } catch (e) { void e; return false; }
 }
@@ -242,6 +237,7 @@ export async function updateSyncEntryContent(memKey: string, content: string): P
       if (idx >= 0) wb[idx] = { ...wb[idx], content };
       return wb;
     }, { render: 'debounced' });
+    clearEntryCache();
     return true;
   } catch (e) { void e; return false; }
 }

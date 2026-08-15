@@ -1,10 +1,3 @@
-// 各 app 设置面板的统一骨架（settings-scaffold.ts）
-// 目的：根治「各 app 设置分类顺序/命名/图标各不相同、缺项、散乱」的问题。
-//   规范段的顺序/图标/名称在此单点定义（改一处全 app 生效）；各 app 只声明「我有哪些段 + 专属内容段」，
-//   详情正文仍由各 app 自己的 renderDetail(catId) 产出（内容天然不同，不强行合并）。
-//
-// 规范顺序（心智模型：读什么进来 → 写什么出去 → 何时自动 → 玩法 → 提示词 → 生态 → 外观 → 记忆数据）：
-//   读取上下文 → 写入管理 → 自动触发 → [内容与玩法 N 段] → 功能提示词 → 生态浓度 → 外观 → 记忆与数据
 import { esc, escAttr } from '../../lib/dom-utils';
 import { iconHtml } from '../../lib/icons';
 import { patchSettingsDetail } from './world-app-settings';

@@ -1,7 +1,4 @@
-// AI 总结 持久化层（任务池 + 自定义提示词）
-// 任务池 _th_ai_taskpool_v1：玩家攒的待发送任务，关面板再开还在。
-// 自定义提示词 _th_ai_prompts_v1：玩家新建/编辑的提示词（内置6套只读，复制后存为自定义）。
-// 命令式、纯 localStorage，不引 Vue。严格向下兼容：仅新增 key。
+// AI 总结 持久化层（任务池 + 自定义提示词）。命令式、纯 localStorage，不引 Vue。
 import type { AiSummaryPrompt, AiSummaryPromptKind } from './config';
 
 const LS_TASKPOOL = '_th_ai_taskpool_v1';
@@ -158,14 +155,12 @@ export function setIncrEnabled(on: boolean): void {
   if (on) localStorage.setItem(LS_INCR_ENABLED, '1'); else localStorage.removeItem(LS_INCR_ENABLED);
 }
 
-// AI 总结面板上次选中的提示词 id 持久化（关面板/注入后重开仍保留选择）。
 const LS_LAST_PROMPT = '_th_ai_last_prompt_v1';
 export function getLastPromptId(): string { return localStorage.getItem(LS_LAST_PROMPT) || ''; }
 export function setLastPromptId(id: string): void {
   if (id) localStorage.setItem(LS_LAST_PROMPT, id); else localStorage.removeItem(LS_LAST_PROMPT);
 }
 
-// AI 总结面板上次进入(钻取)的世界书名持久化（退出重进仍停在该书的条目视图，不退回选书界面）。
 const LS_LAST_DRILL = '_th_ai_last_drill_v1';
 export function getLastDrillBook(): string { return localStorage.getItem(LS_LAST_DRILL) || ''; }
 export function setLastDrillBook(book: string | null): void {
@@ -189,8 +184,6 @@ export function recordIncrSent(book: string, entryName: string, content: string)
 export function clearIncrMap(): void { writeIncrMap({}); }
 
 // ==================== 风格预设（8 内置 + 自定义 + override）====================
-// 风格 = 给系统提示词追加的一段「文风/侧重」后缀。当前选中风格 id 存 _th_ai_style_v1。
-// 支持自定义风格 CRUD + 内置 override（编辑内置存 override，可恢复）。
 const LS_STYLE = '_th_ai_style_v1';
 const LS_STYLES_CUSTOM = '_th_ai_styles_custom_v1';
 const LS_STYLE_OVERRIDES = '_th_ai_style_overrides_v1';
@@ -214,7 +207,6 @@ export const AI_STYLES_BUILTIN: AiStyle[] = [
   { id: 'guofeng', name: '古风·诗词雅韵', systemSuffix: '\n\n【文风要求】desc/简介采用中国古典古风的笔调：措辞典雅，善用对仗、化用诗词意境与古意词汇（如「月白、霜重、檐角、青灯、故人」），含蓄隽永、余韵悠长，如古卷题跋。（古雅只体现在遣词造句，不堆砌至佶屈聱牙，核心信息须清晰，不脱离原文事实，结构与字段名不变。）', builtin: true },
   { id: 'cthulhu', name: '克苏鲁·诡秘', systemSuffix: '\n\n【文风要求】desc/简介采用克苏鲁神话的诡秘笔调：渲染不可名状的恐惧、理智的消磨与古老存在的窥视，多用「无名、深渊、低语、非欧几何、禁忌、疯狂」等意象，语气阴郁神秘、暗示性强。（诡秘氛围基于原文营造，不得凭空捏造原文没有的邪神、仪式或情节，结构与字段名及事实不变。）', builtin: true },
 ];
-// 兼容旧引用名 AI_STYLES（prompt-settings 旧代码 import 过）。
 export const AI_STYLES = AI_STYLES_BUILTIN;
 
 function readStyleOverrides(): Record<string, string> {
@@ -230,7 +222,6 @@ function writeCustomStyles(a: AiStyle[]): void {
   try { localStorage.setItem(LS_STYLES_CUSTOM, JSON.stringify(a)); } catch (e) { void e; }
 }
 
-// 合并后的全部风格（内置[含 override 后缀] + 自定义）。
 export function getAiStyleList(): (AiStyle & { overridden?: boolean })[] {
   const ov = readStyleOverrides();
   const builtins = AI_STYLES_BUILTIN.map(s => ({ ...s, systemSuffix: ov[s.id] != null ? ov[s.id] : s.systemSuffix, overridden: ov[s.id] != null }));
@@ -247,7 +238,6 @@ export function getAiStyleSuffix(): string {
   const id = getAiStyleId();
   return getAiStyleList().find(s => s.id === id)?.systemSuffix || '';
 }
-// 保存风格：内置（id 在 AI_STYLES_BUILTIN）存 override；自定义写入自定义数组（同 id 覆盖）。
 export function saveAiStyle(s: AiStyle): void {
   if (AI_STYLES_BUILTIN.some(b => b.id === s.id)) {
     const m = readStyleOverrides(); m[s.id] = s.systemSuffix; writeStyleOverrides(m);

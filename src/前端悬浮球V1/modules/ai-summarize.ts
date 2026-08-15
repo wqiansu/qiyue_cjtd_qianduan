@@ -1,8 +1,3 @@
-// AI 总结与注入 主面板
-// 选世界书条目 → 选提示词 → 加入任务池 → 同 kind 分桶统一发送 → AI 返回 JSON → 归一化 → 注入确认 → 注入为 managed 卡片 + 建关联。
-// 命令式 innerHTML + openModal2，不引 Vue。跨窗口走 safeGetWorldbook/getRoot 兜底。
-// 依赖：resolveGenerateApiConfig（preset-env）、addManagedItem（managed-store）、
-//   writeInitialItemsForKind（stash-io，回写初始）、openRuntimeImportModal（stash-io，注入确认复用 UI 范式）。
 import { esc, escAttr, qs, qsa, __doc } from '../lib/dom-utils';
 import { openModal2, closeModal2, closeAllModal2 } from '../status-bar-init';
 import { safeGetWorldbook } from '../lib/tavern-api';
@@ -24,12 +19,11 @@ import { openPromptSettings } from './prompt-settings';
 import { buildJsonSchema, parseAiResult, normalizeItems, type NormalizedItem } from '../lib/ai-summary-schema';
 import { resolveGenerateApiConfig } from '../lib/preset-env';
 import { getManagedItems, addManagedItem } from '../lib/managed-store';
-import { getSnapshots, rollbackSnapshot, deleteSnapshot, pushSnapshot } from '../lib/ai-snapshots';
+import { thConfirm } from '../lib/world/ui-kit';
+import { getSnapshots, rollbackSnapshot, deleteSnapshot, pushSnapshot, clearSnapshots } from '../lib/ai-snapshots';
 import { MANAGED_CFG, type ManagedKind } from '../lib/config';
 import { getRoot } from '../lib/tavern-api';
 import { writeInitialItemsForKind, type InitialWriteItem, type InitialWriteMode } from './stash-io';
-
-// ==================== 提示词（内置 + 自定义合并）====================
 
 function allPrompts(): AiSummaryPrompt[] {
   return getAllAsSummaryPrompts();
@@ -38,12 +32,9 @@ function promptById(id: string): AiSummaryPrompt | undefined {
   return allPrompts().find(p => p.id === id);
 }
 
-// ==================== 世界书选择器（三源去重）====================
-
 type WbSource = '全部' | '全局' | '角色卡';
 type WbBookInfo = { name: string; source: WbSource; loaded?: boolean; entries?: { name: string; enabled: boolean; contentLen: number; content?: string }[] };
 
-// 取三源世界书名去重（角色卡优先标注，因其最常用）
 function listWorldbooks(): WbBookInfo[] {
   const out: WbBookInfo[] = [];
   const seen = new Set<string>();
@@ -62,42 +53,33 @@ function listWorldbooks(): WbBookInfo[] {
   return out;
 }
 
-// ==================== 面板状态 ====================
-
 type PanelState = {
   books: WbBookInfo[];
-  drillBook: string | null;    // 两级钻取——null=书列表视图；书名=进入该书的条目视图
-  selectedEntries: Set<string>; // 选中条目 key：`${book}::${entryName}`
-  promptId: string;            // 当前选的提示词
-  searchQ: string;             // 当前搜索关键字
-  searchHits: Set<string>;     // 搜索命中条目 key（高亮用）
-  searchBooks: Set<string>;    // 搜索命中的世界书名（书列表视图只显示命中书）
+  drillBook: string | null;
+  selectedEntries: Set<string>;
+  promptId: string;
+  searchQ: string;
+  searchHits: Set<string>;
+  searchBooks: Set<string>;
 };
 
 function freshState(): PanelState {
   const prompts = allPrompts();
-  // 优先恢复上次选中的提示词（仍存在才用，否则回退首个）
   const last = getLastPromptId();
   const promptId = (last && prompts.some(p => p.id === last)) ? last : (prompts[0]?.id ?? '');
   const books = listWorldbooks();
-  // 恢复上次进入的世界书（仍存在才用），退出重进直接停在该书条目视图。
   const lastDrill = getLastDrillBook();
   const drillBook = (lastDrill && books.some(b => b.name === lastDrill)) ? lastDrill : null;
   return { books, drillBook, selectedEntries: new Set(), promptId, searchQ: '', searchHits: new Set(), searchBooks: new Set() };
 }
 
 let ST: PanelState = freshState();
-// 中文 IME 组合态标志（拼音输入未上屏期间为 true，期间不触发搜索重渲染）
 let _imeComposing = false;
-// 条目列表滚动位置，注入卡片后 renderPanel 重建会丢失，故持续记录、重建后恢复。
 let _listScroll = 0;
-
-// ==================== 主入口 ====================
 
 export function openAiSummarize(): void {
   ST = freshState();
   renderPanel();
-  // 若恢复了上次进入的世界书，异步把它的条目加载出来（渲染时先显示"加载中…"）。
   if (ST.drillBook) {
     const b = ST.books.find(x => x.name === ST.drillBook);
     if (b && !b.loaded) { void loadBook(b).then(() => { if (ST.drillBook === b.name) rerenderBody(); }); }
@@ -123,15 +105,12 @@ function renderPanel(): void {
   bindPanelEvents();
 }
 
-// ==================== 选择器渲染 ====================
-
 function renderSelector(): string {
   const prompts = allPrompts();
   const promptOpts = prompts.map(p =>
     `<option value="${escAttr(p.id)}">${esc(p.label)}${p.isBuiltin ? '' : '（自定义）'}</option>`).join('');
 
   const inDrill = ST.drillBook != null;
-  // 顶部公共区：提示词 + 增量 + 搜索（两视图共用）
   const head = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span style="font-weight:700;color:var(--pink);font-size:13px">① 世界书条目</span>
       <span style="color:var(--tx3);font-size:11px">${inDrill ? '勾选条目 → 加入任务池' : '点世界书进入查看条目'}</span>
@@ -148,15 +127,12 @@ function renderSelector(): string {
     <input id="th-ai-search" class="th-edit-input" style="width:100%;font-size:12px" placeholder="${inDrill ? '在本世界书内搜索条目…' : '搜索世界书 / 条目（命中的世界书才会显示）'}" value="${escAttr(ST.searchQ)}">`;
 
   const body = inDrill ? renderEntriesView() : renderBooksView();
-  // 把列表区独立成 .th-ai-body 包裹层。搜索时只重渲染本层、绝不触碰 #th-ai-search 输入框，
-  // 输入框 DOM 保持存活 → 焦点与中文 IME 输入不被打断。
   return `<div class="th-ai-sel" style="display:flex;flex-direction:column;gap:10px;min-height:0">
     ${head}
     <div class="th-ai-body" style="display:flex;flex-direction:column;flex:1;min-height:0">${body}</div>
   </div>`;
 }
 
-// 书列表视图（drillBook=null）：列出世界书，搜索时只显示命中书；点书进入条目视图
 function renderBooksView(): string {
   const q = ST.searchQ.trim();
   const books = q ? ST.books.filter(b => ST.searchBooks.has(b.name)) : ST.books;
@@ -180,7 +156,6 @@ function renderBooksView(): string {
   return `<div class="th-ai-books" style="display:grid;gap:6px;flex:1;overflow:auto;min-height:120px;padding-right:4px">${rows || empty}</div>`;
 }
 
-// 条目视图（drillBook=书名）：返回按钮 + 当前书条目列表（搜索过滤本书）
 function renderEntriesView(): string {
   const b = ST.books.find(x => x.name === ST.drillBook);
   const backBar = `<div style="display:flex;align-items:center;gap:8px">
@@ -194,7 +169,7 @@ function renderEntriesView(): string {
 }
 
 function renderBookEntries(b: WbBookInfo): string {
-  if (!b.loaded) return `<div style="padding:10px;color:var(--tx3);font-size:12px">加载中…</div>`;
+  if (!b.loaded) return `<div style="padding:10px;color:var(--tx3);font-size:12px">搅匀甜蜜中…</div>`;
   const q = ST.searchQ.trim().toLowerCase();
   let entries = b.entries || [];
   if (q) entries = entries.filter(e => e.name.toLowerCase().includes(q));
@@ -219,12 +194,9 @@ function renderBookEntries(b: WbBookInfo): string {
   </div>`;
 }
 
-// ==================== 任务池渲染 ====================
-
 function renderTaskpool(): string {
   const tasks = getTasks();
   const cnt = tasks.length;
-  // 按 kind 分桶统计
   const buckets = new Map<AiSummaryPromptKind, number>();
   for (const t of tasks) buckets.set(t.kind, (buckets.get(t.kind) || 0) + 1);
   const bucketStr = Array.from(buckets.entries()).map(([k, n]) => `${MANAGED_CFG[k as ManagedKind].label}×${n}`).join(' / ') || '空';
@@ -267,8 +239,6 @@ function renderTaskpool(): string {
   </div>`;
 }
 
-// ==================== 事件绑定 ====================
-
 function bindPanelEvents(): void {
   qs('#th-ai-close')?.addEventListener('click', closeModal2);
   qs('#th-ai-send')?.addEventListener('click', onSend);
@@ -276,10 +246,9 @@ function bindPanelEvents(): void {
   qs('#th-ai-preview')?.addEventListener('click', () => { void openSendPreview(); });
   qs('#th-ai-prompt')?.addEventListener('change', e => {
     ST.promptId = (e.target as HTMLSelectElement).value;
-    setLastPromptId(ST.promptId); // 持久化选择
+    setLastPromptId(ST.promptId);
   });
   qs('#th-ai-prompt-edit')?.addEventListener('click', openPromptSettings);
-  // 增量模式开关 + 清除记录
   qs('#th-ai-incr')?.addEventListener('change', e => {
     setIncrEnabled(!!(e.target as HTMLInputElement).checked);
     toastr?.info?.((e.target as HTMLInputElement).checked ? '增量模式已开启' : '增量模式已关闭');
@@ -288,7 +257,6 @@ function bindPanelEvents(): void {
     clearIncrMap(); toastr?.success?.('已清除增量记录（下次将全量发送）');
   });
   // 搜索框 — 跨所有书过滤条目/世界书名，命中自动展开高亮（防抖 + IME 中文输入保护）。
-  // _imeComposing：中文拼音组合期间（compositionstart~end）不触发搜索，避免「didian→失焦」。
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
   const searchInput = qs<HTMLInputElement>('#th-ai-search');
   searchInput?.addEventListener('compositionstart', () => { _imeComposing = true; });
@@ -302,18 +270,16 @@ function bindPanelEvents(): void {
   searchInput?.addEventListener('input', (e) => {
     const q = (e.target as HTMLInputElement).value;
     ST.searchQ = q;
-    if (_imeComposing) return; // 组合中（拼音未上屏）不重渲染，保住焦点
+    if (_imeComposing) return;
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { void onSearch(q); }, 280);
   });
 
-  // 初始设置下拉选中
   const sel = qs<HTMLSelectElement>('#th-ai-prompt');
   if (sel && ST.promptId) sel.value = ST.promptId;
 
   bindBodyEvents();
 
-  // 任务池操作（事件委托）
   qs('.th-ai-tasks')?.addEventListener('click', (e) => {
     const t = e.target as HTMLElement;
     const btn = t.closest('[data-act]') as HTMLElement | null;
@@ -334,20 +300,17 @@ function bindPanelEvents(): void {
   qs('#th-ai-pool-clear')?.addEventListener('click', () => {
     clearTasks(); rerenderTaskpool();
   });
-  // 任务池导入导出（JSON 文件）
   qs('#th-ai-pool-export')?.addEventListener('click', exportTaskpool);
   qs('#th-ai-pool-import')?.addEventListener('click', () => qs<HTMLInputElement>('#th-ai-pool-file')?.click());
   qs<HTMLInputElement>('#th-ai-pool-file')?.addEventListener('change', (e) => {
     const f = (e.target as HTMLInputElement).files?.[0];
     if (f) void importTaskpool(f);
-    (e.target as HTMLInputElement).value = ''; // 允许重复选同文件
+    (e.target as HTMLInputElement).value = '';
   });
-  // 存为方案 / 载入方案
   qs('#th-ai-plan-save')?.addEventListener('click', onSavePlan);
   qs('#th-ai-plan-load')?.addEventListener('click', openLoadPlanModal);
 }
 
-// 把当前任务池存为方案（弹输入名 modal）
 function onSavePlan(): void {
   const tasks = getTasks();
   if (!tasks.length) { toastr?.warning?.('任务池为空，无法存为方案'); return; }
@@ -371,7 +334,6 @@ function onSavePlan(): void {
   });
 }
 
-// 载入方案 modal（列出已存方案，载入=清空当前池+填入）
 function openLoadPlanModal(): void {
   const plans = getPlans();
   const rows = plans.length ? plans.map(p => `<div class="th-ai-plan-row" style="display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--bg3);border-radius:8px">
@@ -411,7 +373,6 @@ function openLoadPlanModal(): void {
   });
 }
 
-// 导出任务池为 JSON 文件（内联 Blob 下载，避免 lib→modules 反向依赖 downloadText）
 function exportTaskpool(): void {
   const tasks = getTasks();
   if (!tasks.length) { toastr?.warning?.('任务池为空，无可导出'); return; }
@@ -427,7 +388,6 @@ function exportTaskpool(): void {
   } catch (e) { toastr?.error?.('导出失败：' + (e instanceof Error ? e.message : String(e))); }
 }
 
-// 从 JSON 文件导入任务池（追加，addTask 重新分配 taskId）
 async function importTaskpool(file: File): Promise<void> {
   try {
     const text = await file.text();
@@ -459,8 +419,8 @@ async function enterBook(bookName: string): Promise<void> {
   const b = ST.books.find(x => x.name === bookName);
   if (b && !b.loaded) await loadBook(b);
   ST.drillBook = bookName;
-  setLastDrillBook(bookName); // 持久化进入的书，退出重进恢复
-  _listScroll = 0; // 进入新书从顶部开始
+  setLastDrillBook(bookName);
+  _listScroll = 0;
   rerenderBody();
 }
 
@@ -475,7 +435,6 @@ function toggleBookAll(bookName: string, selectAll: boolean): void {
   refreshAddBtn();
 }
 
-// 悬浮预览：在条目行旁显示该条目 content 全文（自绘浮层，挂 iframe body）
 let _previewEl: HTMLElement | null = null;
 function showEntryPreview(anchor: HTMLElement, key: string): void {
   const [book, entryName] = key.split('::');
@@ -489,7 +448,6 @@ function showEntryPreview(anchor: HTMLElement, key: string): void {
   el.textContent = content.slice(0, 1200) + (content.length > 1200 ? '\n…（已截断）' : '');
   __doc.body.appendChild(el);
   const r = anchor.getBoundingClientRect();
-  // 优先放右侧，空间不足放左侧
   const w = 320;
   let left = r.right + 8;
   if (left + w > (__doc.documentElement.clientWidth || 9999)) left = Math.max(8, r.left - w - 8);
@@ -502,7 +460,6 @@ function hideEntryPreview(): void {
   if (_previewEl) { try { _previewEl.remove(); } catch (e) { void e; } _previewEl = null; }
 }
 
-// 共享：异步加载某本世界书条目到 ST.books（带 content 缓存，供搜索匹配 + 悬浮预览复用）。
 async function loadBook(b: WbBookInfo): Promise<void> {
   if (b.loaded) return;
   try {
@@ -515,17 +472,12 @@ async function loadBook(b: WbBookInfo): Promise<void> {
   b.loaded = true;
 }
 
-// 搜索。
-//  - 书列表视图：跨所有书匹配，命中的书（书名命中 或 含命中条目）才显示（searchBooks）。
-//  - 条目视图：renderBookEntries 内按 searchQ 过滤本书条目即可，无需重算。
 async function onSearch(q: string): Promise<void> {
   const query = q.trim().toLowerCase();
   ST.searchHits = new Set();
   ST.searchBooks = new Set();
   if (!query) { rerenderBody(); return; }
-  // 条目视图：只过滤本书条目（renderBookEntries 已处理），直接重渲染列表区
   if (ST.drillBook != null) { rerenderBody(); return; }
-  // 书列表视图：需加载各书条目以判断命中
   for (const b of ST.books) {
     await loadBook(b);
     const bookNameHit = b.name.toLowerCase().includes(query);
@@ -551,10 +503,9 @@ function onAddToPool(): void {
     const b = ST.books.find(x => x.name === book);
     const e = b?.entries?.find(x => x.name === entryName);
     if (!b || !e) continue;
-    // 取条目原文 content（展开时已加载条目名，但 content 未存；这里再读一次完整内容）
     addTask({
       kind: prompt.kind, promptId: prompt.id, book, entryName,
-      content: '',  // content 在发送时按需读取（避免任务池存大量文本）
+      content: '',
       customInstruction: '',
     });
     added++;
@@ -570,20 +521,16 @@ function rerenderSelector(): void {
   const slot = qs('.th-ai-sel');
   if (slot) { slot.outerHTML = renderSelector(); bindPanelEvents(); }
 }
-// 只重渲染列表区（.th-ai-body），不触碰搜索输入框 → 焦点/中文输入不被打断。
-// 仅在「书列表/条目列表内容变化」时调用（搜索过滤、进入/返回、勾选刷新）。
 function rerenderBody(): void {
   const body = qs('.th-ai-body');
   if (!body) { rerenderSelector(); return; }
   body.innerHTML = ST.drillBook != null ? renderEntriesView() : renderBooksView();
   bindBodyEvents();
 }
-// 列表区事件（进入/返回/全选反选/勾选/悬浮预览）——与搜索输入框解耦，可单独重绑。
 function bindBodyEvents(): void {
-  // 持续记录条目列表滚动位置，注入后 renderPanel 重建用 _listScroll 还原。
   const listEl = qs<HTMLElement>('.th-ai-books');
   if (listEl) {
-    listEl.scrollTop = _listScroll; // 重渲染后立即还原（搜索/勾选刷新也保位）
+    listEl.scrollTop = _listScroll;
     listEl.addEventListener('scroll', () => { _listScroll = listEl.scrollTop; });
   }
   qs('#th-ai-back')?.addEventListener('click', () => { ST.drillBook = null; setLastDrillBook(null); _listScroll = 0; rerenderBody(); });
@@ -602,7 +549,6 @@ function bindBodyEvents(): void {
     if (cb.checked) ST.selectedEntries.add(cb.dataset.key!); else ST.selectedEntries.delete(cb.dataset.key!);
     refreshAddBtn();
   });
-  // 悬浮预览：hover 条目行显示 content 全文（自绘浮层，data 委托）
   qs('.th-ai-books')?.addEventListener('mouseover', (e) => {
     const label = (e.target as HTMLElement).closest('[data-entry-key]') as HTMLElement | null;
     if (!label) return;
@@ -619,13 +565,7 @@ function rerenderTaskpool(): void {
   if (slot) { slot.outerHTML = renderTaskpool(); bindPanelEvents(); }
 }
 
-// ==================== 提示词管理 ===================
-// 提示词编辑内置 override + 自定义 + 占位符帮助 + registry 接口，由 modules/prompt-settings.ts 的
-// openPromptSettings 提供。
-
-// ==================== 发送与注入（dry-run/分桶/parse/归一化 + 注入）====================
-
-// 用 generateRaw + ordered_prompts，不带酒馆预设/世界书/聊天历史，内容精确进 user_input 位。
+// 用 generateRaw + ordered_prompts 不带酒馆预设/世界书/聊天历史
 function getGenerateRaw(): ((cfg: any) => Promise<unknown>) | null {
   try {
     const w = window as any;
@@ -647,7 +587,6 @@ function getInjectPrompts(): ((p: any[], opts?: any) => { uninject: () => void }
   return null;
 }
 
-// 变量扩展：跨窗口取一个全局函数（window 优先 → getRoot 兜底）
 function getFn(name: string): any {
   try {
     const w = window as any;
@@ -658,7 +597,6 @@ function getFn(name: string): any {
   return null;
 }
 
-// {{角色名}}：酒馆当前角色名（getCharData('current').name）
 function getCurrentCharName(): string {
   try {
     const fn = getFn('getCharData');
@@ -669,7 +607,6 @@ function getCurrentCharName(): string {
   return '';
 }
 
-// {{最近剧情}}：最近 N 条聊天消息摘要（getChatMessages，按楼层范围）
 function getRecentChatSummary(n = 5): string {
   try {
     const fn = getFn('getChatMessages');
@@ -688,15 +625,13 @@ function getRecentChatSummary(n = 5): string {
   return '';
 }
 
-// 一个桶 = 同 kind 的若干任务，合并为一次 generate 请求
 type Bucket = { kind: AiSummaryPromptKind; tasks: AiTask[] };
-// 桶发送结果
 type BucketResult = {
   kind: AiSummaryPromptKind;
   ok: boolean;
   error?: string;
-  items: NormalizedItem[];          // 归一化后的卡片
-  taskIds: string[];                 // 本桶覆盖的 task_id（用于进度报告）
+  items: NormalizedItem[];
+  taskIds: string[];
 };
 
 function bucketTasks(tasks: AiTask[]): Bucket[] {
@@ -708,9 +643,8 @@ function bucketTasks(tasks: AiTask[]): Bucket[] {
   return Array.from(map.entries()).map(([kind, ts]) => ({ kind, tasks: ts }));
 }
 
-// 读取任务条目原文（按世界书缓存，避免重复读）
 async function loadTaskContents(tasks: AiTask[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>(); // taskId → content
+  const out = new Map<string, string>();
   const bookCache = new Map<string, any[]>();
   for (const t of tasks) {
     let entries = bookCache.get(t.book);
@@ -729,8 +663,6 @@ function estimateTokens(text: string): number {
   return Math.ceil((text || '').length / 1.5);
 }
 
-// 拼 user_input：桶内每个任务一块，标注 task_id，附自定义指令
-// 置信度要求已由 AI_SUMMARY_SYSTEM_PROMPT 统一交代，此处不再重复追加。
 function buildBucketInput(bucket: Bucket, contents: Map<string, string>, prompt: AiSummaryPrompt): string {
   const blocks: string[] = [];
   blocks.push(`【提取任务】本次需按 task_id 分别提取 ${bucket.tasks.length} 个任务，全部输出为「${prompt.label}」。`);
@@ -738,8 +670,6 @@ function buildBucketInput(bucket: Bucket, contents: Map<string, string>, prompt:
     const instr = t.customInstruction ? `\n[本任务附加指令] ${t.customInstruction}` : '';
     blocks.push(`--- task_id: ${t.taskId} ---${instr}\n【条目原文】\n${contents.get(t.taskId) || '(空)'}`);
   }
-  // 用提示词模板包住（替换占位符；条目原文已在上方分块给出，模板里 {{条目原文}} 替换为引导语）
-  // 变量扩展 {{当前卡片名列表}} {{角色名}} {{最近剧情}}（懒求值，模板用到才取）
   let tmpl = prompt.template
     .replace(/\{\{条目原文\}\}/g, '见上方各 task_id 块')
     .replace(/\{\{自定义指令\}\}/g, bucket.tasks.some(t => t.customInstruction) ? '各任务附加指令见上方块。' : '');
@@ -754,11 +684,9 @@ function buildBucketInput(bucket: Bucket, contents: Map<string, string>, prompt:
     const recent = getRecentChatSummary(5);
     tmpl = tmpl.replace(/\{\{最近剧情\}\}/g, recent || '（无最近聊天记录）');
   }
-  // 提取约束（UI 旋钮）渲染成约束文本追加。0/留空不限制。
   const c = prompt.constraints;
   if (c) {
     const lines: string[] = [];
-    // desc 字数支持下限~上限区间
     const lo = c.descMinChars && c.descMinChars > 0 ? c.descMinChars : 0;
     const hi = c.descMaxChars && c.descMaxChars > 0 ? c.descMaxChars : 0;
     if (lo && hi) lines.push(`每项 desc/简介控制在 ${lo}~${hi} 字之间`);
@@ -770,11 +698,8 @@ function buildBucketInput(bucket: Bucket, contents: Map<string, string>, prompt:
   return `${tmpl}\n\n${blocks.join('\n\n')}`;
 }
 
-// dry-run 预览 modal（发送前展示桶数/token/预设，确认再发）
 async function dryRunPreview(buckets: Bucket[], contents: Map<string, string>): Promise<boolean> {
   const cfg = resolveGenerateApiConfig();
-  // 逐桶预估 token：按真实拼装文本（system 人格+系统+风格
-  // 与 user_input = buildBucketInput）估算，与实际发送口径一致（不能拿字符总数当字符串估算）。
   const systemText = (getActiveJailbreakText() ? getActiveJailbreakText() + '\n\n' : '') + getActivePersonaText() + AI_SUMMARY_SYSTEM_PROMPT + getAiStyleSuffix();
   const bucketTok: number[] = [];
   for (const b of buckets) {
@@ -811,8 +736,6 @@ async function dryRunPreview(buckets: Bucket[], contents: Map<string, string>): 
   });
 }
 
-// 发送前预览 —— 展示最终拼装给 AI 的完整文本（人格 + 系统提示词 + 风格后缀 = system；
-// buildBucketInput = user_input）。按任务池分桶逐桶预览；任务池为空时提示。
 async function openSendPreview(): Promise<void> {
   const tasks = getTasks();
   if (!tasks.length) { toastr?.warning?.('任务池为空，先从左侧加入条目'); return; }
@@ -854,11 +777,9 @@ async function onSend(): Promise<void> {
   const generateRaw = getGenerateRaw();
   if (!generateRaw) { toastr?.error?.('当前环境无 generateRaw 接口'); return; }
 
-  // 1. 读取所有任务条目原文
   toastr?.info?.('正在读取世界书条目…');
   const contents = await loadTaskContents(tasks);
 
-  // 增量模式 — 内容未变更的条目跳过发送（沿用上次结果，不重跑）
   let toSend = tasks;
   let skippedIncr = 0;
   if (getIncrEnabled()) {
@@ -872,18 +793,15 @@ async function onSend(): Promise<void> {
     }
   }
 
-  // 2. 分桶 + dry-run 预览
   const buckets = bucketTasks(toSend);
   const ok = await dryRunPreview(buckets, contents);
   if (!ok) return;
 
-  // 3. 串行发桶（错误隔离）→ 收集原始输出 → 预览确认（解析前加确认/取消，失败不自动关）
   const raws = await runSendLoop(buckets, contents);
   if (!raws.length) { closeAllModal2(); renderPanel(); return; }
   showOutputPreview(buckets, raws, contents);
 }
 
-// 串行发桶，收集各桶原始 AI 输出（不解析）。开进度 modal + 流式监听，返回 BucketRaw[]。
 async function runSendLoop(buckets: Bucket[], contents: Map<string, string>): Promise<BucketRaw[]> {
   const cfg = resolveGenerateApiConfig();
   const generateRaw = getGenerateRaw();
@@ -899,7 +817,6 @@ async function runSendLoop(buckets: Bucket[], contents: Map<string, string>): Pr
     const r = await sendOneBucket(b, contents, prompt, cfg, generateRaw);
     raws.push(r);
     if (r.ok) {
-      // 记录本桶各条目内容 hash（仅成功桶才记录，失败桶下次重试）
       if (getIncrEnabled()) {
         for (const t of b.tasks) recordIncrSent(t.book, t.entryName, contents.get(t.taskId) || '');
       }
@@ -911,7 +828,6 @@ async function runSendLoop(buckets: Bucket[], contents: Map<string, string>): Pr
   return raws;
 }
 
-// 进度 modal（流式区 280px + 可复制当前输出）
 function openProgressModal(): void {
   openModal2('AI 总结中', `<div class="th-ai-progress" style="padding:18px;display:grid;gap:10px">
     <div id="th-ai-prog-text" style="font-size:14px">准备发送…</div>
@@ -923,7 +839,6 @@ function openProgressModal(): void {
   qs('#th-ai-prog-copy')?.addEventListener('click', () => { copyText(_streamText); toastr?.success?.('已复制当前输出'); });
 }
 
-// AI 输出预览 + 确认/取消/重试。确认后才解析注入；失败(全空)给重试/返回，不自动关。
 function showOutputPreview(buckets: Bucket[], raws: BucketRaw[], contents: Map<string, string>): void {
   const anyOk = raws.some(r => r.ok && r.raw);
   const allText = raws.filter(r => r.ok).map(r => r.raw).join('\n\n----\n\n');
@@ -959,7 +874,6 @@ function showOutputPreview(buckets: Bucket[], raws: BucketRaw[], contents: Map<s
     if (again.length) showOutputPreview(buckets, again, contents); else { closeAllModal2(); renderPanel(); }
   });
   qs('#th-ai-pv-confirm')?.addEventListener('click', () => {
-    // 解析所有成功桶 → BucketResult[]（失败桶跳过）
     const results: BucketResult[] = [];
     for (let i = 0; i < raws.length; i++) {
       if (!raws[i].ok || !raws[i].raw) continue;
@@ -968,7 +882,6 @@ function showOutputPreview(buckets: Bucket[], raws: BucketRaw[], contents: Map<s
     const totalItems = results.reduce((s, r) => s + r.items.length, 0);
     if (totalItems === 0) {
       toastr?.warning?.('解析后无可注入内容（可重试或返回）');
-      // 保持预览 modal，不自动关
       return;
     }
     LAST_SEND = { buckets, contents, results };
@@ -976,8 +889,6 @@ function showOutputPreview(buckets: Bucket[], raws: BucketRaw[], contents: Map<s
   });
 }
 
-// 发送单个桶 → 返回原始 AI 输出（不解析）。用 generateRaw + ordered_prompts[内置系统提示词,'user_input']，
-// 不带酒馆预设/世界书/聊天历史，内容精确进入 user_input 位。解析延后到玩家「确认」后。
 type BucketRaw = { kind: AiSummaryPromptKind; ok: boolean; raw: string; error?: string; taskIds: string[] };
 
 async function sendOneBucket(
@@ -998,10 +909,9 @@ async function sendOneBucket(
       ordered_prompts: ordered,
       json_schema: buildJsonSchema(b.kind),
       should_silence: true,
-      should_stream: true, // 流式预览，配合 STREAM_TOKEN_RECEIVED_FULLY 事件实时显示半截输出
+      should_stream: true,
     };
     if (cfg.custom_api) genCfg.custom_api = cfg.custom_api;
-    // 不传 preset_name：用内置系统提示词，避免 RP 预设与世界书干扰 user_input
     const ret = await generateRaw(genCfg);
     const raw = typeof ret === 'string'
       ? ret
@@ -1014,7 +924,6 @@ async function sendOneBucket(
   }
 }
 
-// 解析单个桶的原始 AI 输出 → BucketResult（parseAiResult + 归一化）。供「确认解析」与单桶重生复用。
 function parseBucketRaw(b: Bucket, raw: string): BucketResult {
   try {
     const parsed = parseAiResult(raw);
@@ -1028,7 +937,6 @@ function parseBucketRaw(b: Bucket, raw: string): BucketResult {
   }
 }
 
-// 最近一次发送的上下文（桶/原文/结果），供「重新生成本桶」复用，不重跑整批
 let LAST_SEND: { buckets: Bucket[]; contents: Map<string, string>; results: BucketResult[] } | null = null;
 
 function setProgress(text: string, done: number, total: number): void {
@@ -1039,16 +947,14 @@ function appendLog(line: string): void {
   const log = qs('#th-ai-prog-log'); if (log) log.innerHTML += esc(line) + '<br>';
 }
 
-// ==================== 流式预览（监听 STREAM_TOKEN_RECEIVED_FULLY 实时显示半截输出）====================
 let _streamOff: (() => void) | null = null;
-let _streamText = '';   // 当前实时输出文本，供「复制」按钮取用
+let _streamText = '';
 function setStream(text: string): void {
   _streamText = text || '';
   const el = qs('#th-ai-prog-stream');
   if (el) el.textContent = _streamText || '（等待 AI 输出…）';
 }
 
-// 跨窗口复制文本（execCommand 兜底，iframe/parent 均可用）
 function copyText(text: string): void {
   try {
     const ta = __doc.createElement('textarea');
@@ -1076,16 +982,13 @@ function stopStreamListener(): void {
   try { if (_streamOff) { _streamOff(); _streamOff = null; } } catch (e) { void e; }
 }
 
-// ==================== 注入确认 + 注入 + 建关联 + 回写初始 ====================
-
-// 一条可注入项（展平自各桶归一化结果）
 type Injectable = {
   kind: AiSummaryPromptKind;
   name: string;
-  desc: string;          // location/event: 纯文本简介；stash-*: 结构化 JSON 字符串
+  desc: string;
   tags: string[];
-  exists: boolean;       // 本地是否已有同名卡片（冲突）
-  locked: boolean;       // 本地同名卡片是否被锁定（锁定则注入强制跳过）
+  exists: boolean;
+  locked: boolean;
 };
 
 function collectInjectables(results: BucketResult[]): Injectable[] {
@@ -1111,7 +1014,6 @@ function openInjectConfirm(results: BucketResult[]): void {
   const injectables = collectInjectables(results);
   if (!injectables.length) { toastr?.warning?.('无可注入内容'); renderPanel(); return; }
 
-  // 按桶 kind 分组渲染，每组带「重新生成本桶」按钮（单桶重生不重跑整批）
   const groups: { kind: AiSummaryPromptKind; label: string; icon: string; idxs: number[] }[] = [];
   for (let i = 0; i < injectables.length; i++) {
     const it = injectables[i];
@@ -1147,7 +1049,6 @@ function openInjectConfirm(results: BucketResult[]): void {
       <div class="th-ai-inj-conflict">${conflict}</div>
     </label>`;
   };
-  // 分组渲染：组头（图标+类别+数量+重新生成按钮）+ 该组条目
   const listHtml = groups.map(g => {
     const head = `<div class="th-ai-inj-group" style="display:flex;align-items:center;gap:8px;padding:6px 4px;margin-top:4px">
       <i class="${g.icon}" style="color:var(--pink)"></i>
@@ -1181,7 +1082,6 @@ function openInjectConfirm(results: BucketResult[]): void {
 
   qs('#th-ai-inj-cancel')?.addEventListener('click', () => { closeModal2(); renderPanel(); });
   qs('#th-ai-snapshots')?.addEventListener('click', openSnapshotsModal);
-  // 重新生成本桶（单桶重生，复用 LAST_SEND 上下文，不重跑整批）
   qsa<HTMLButtonElement>('.th-ai-reroll').forEach(btn => {
     btn.addEventListener('click', () => { void rerollBucket(btn.dataset.reroll as AiSummaryPromptKind, btn); });
   });
@@ -1192,7 +1092,6 @@ function openInjectConfirm(results: BucketResult[]): void {
     if (!picks.length) { toastr?.warning?.('未勾选任何项'); return; }
     void doInject(injectables, picks, writeback, wbMode);
   });
-  // 把选中项经 injectPrompts 临时注入下次 AI 请求上下文（不建卡，once:true 仅本次有效）
   qs('#th-ai-inj-ctx')?.addEventListener('click', () => {
     const picks = collectPicks(injectables);
     if (!picks.length) { toastr?.warning?.('未勾选任何项'); return; }
@@ -1200,13 +1099,12 @@ function openInjectConfirm(results: BucketResult[]): void {
   });
 }
 
-// 收集注入确认面板的勾选项（复用：建卡注入 与 注入上下文 共用）。locked 项已 disabled 复选框，不会进 picks。
 function collectPicks(injectables: Injectable[]): { idx: number; conflict: 'skip' | 'overwrite' | 'merge' | 'copy' }[] {
   const picks: { idx: number; conflict: 'skip' | 'overwrite' | 'merge' | 'copy' }[] = [];
   qsa<HTMLInputElement>('.th-ai-inj-ck').forEach(ck => {
     if (ck.checked) {
       const idx = Number(ck.dataset.idx);
-      if (injectables[idx]?.locked) return; // 锁定：强制跳过
+      if (injectables[idx]?.locked) return;
       const exists = injectables[idx].exists;
       const conflictSel = qs<HTMLSelectElement>(`.th-ai-conflict[data-idx="${idx}"]`);
       const conflict = exists && conflictSel ? (conflictSel.value as 'skip' | 'overwrite' | 'merge' | 'copy') : 'overwrite';
@@ -1216,7 +1114,6 @@ function collectPicks(injectables: Injectable[]): { idx: number; conflict: 'skip
   return picks;
 }
 
-// 把选中项格式化为提示词文本，经 injectPrompts 注入下次 AI 请求（position:'in_chat'，once:true 仅本次有效，不建卡）。
 async function injectToContext(injectables: Injectable[], picks: { idx: number }[]): Promise<void> {
   const injectPrompts = getInjectPrompts();
   if (!injectPrompts) { toastr?.error?.('当前环境无 injectPrompts 接口'); return; }
@@ -1235,7 +1132,6 @@ async function injectToContext(injectables: Injectable[], picks: { idx: number }
   }
 }
 
-// 把可注入项格式化为给 AI 看的简洁摘要文本（按类别分组）。
 function formatInjectContextText(injectables: Injectable[], picks: { idx: number }[]): string {
   const byKind = new Map<AiSummaryPromptKind, Injectable[]>();
   for (const p of picks) {
@@ -1252,12 +1148,10 @@ function formatInjectContextText(injectables: Injectable[], picks: { idx: number
   return lines.join('\n');
 }
 
-// 单条可注入项 → 给 AI 的摘要行
 function formatItemLine(it: Injectable): string {
   if (it.kind === 'location' || it.kind === 'event') {
     return `${it.name}：${it.desc || '(无简介)'}`;
   }
-  // stash-*：desc 是结构化 JSON 字符串
   let f: Record<string, any> = {};
   try { f = it.desc ? JSON.parse(it.desc) : {}; } catch (e) { void e; }
   const g = (k: string) => (f[k] != null && f[k] !== '') ? String(f[k]) : '';
@@ -1277,11 +1171,9 @@ function formatItemLine(it: Injectable): string {
     if (g('持续时间')) line += ` 持续${g('持续时间')}`;
     return line;
   }
-  // stash-clothing
   return `${it.name}（${g('穿着部位') || '?'}·${g('穿着情况') || '穿着'}）：${g('外观详情')}`;
 }
 
-// 重新生成单个桶。复用 LAST_SEND 的桶/原文上下文，仅重跑该 kind 的一次请求，替换其结果后重渲染确认。
 async function rerollBucket(kind: AiSummaryPromptKind, btn: HTMLButtonElement): Promise<void> {
   if (!LAST_SEND) { toastr?.warning?.('无可重生的上下文'); return; }
   const generateRaw = getGenerateRaw();
@@ -1300,7 +1192,6 @@ async function rerollBucket(kind: AiSummaryPromptKind, btn: HTMLButtonElement): 
   LAST_SEND.results[ri] = newRes;
   if (newRes.ok) toastr?.success?.(`已重新生成「${prompt?.label || kind}」：${newRes.items.length} 项`);
   else toastr?.error?.(`重生失败：${newRes.error}`);
-  // 用最新结果重渲染（勾选状态会重置为默认，符合「换了一批结果」的预期）
   openInjectConfirm(LAST_SEND.results);
 }
 
@@ -1311,14 +1202,12 @@ async function doInject(
   wbMode: InitialWriteMode,
 ): Promise<void> {
   let injected = 0, skipped = 0, copied = 0, merged = 0;
-  // 按 kind 攒回写初始的 items
   const wbByKind = new Map<ManagedKind, InitialWriteItem[]>();
   const addWb = (kind: ManagedKind, item: InitialWriteItem) => {
     if (!wbByKind.has(kind)) wbByKind.set(kind, []);
     wbByKind.get(kind)!.push(item);
   };
 
-  // 快照：注入前，按 kind 收集「将被覆盖/合并的同名卡片名」，存快照供回滚。
   const willOverwriteByKind = new Map<ManagedKind, string[]>();
   for (const p of picks) {
     const it = injectables[p.idx];
@@ -1335,7 +1224,6 @@ async function doInject(
   for (const p of picks) {
     const it = injectables[p.idx];
     if (it.exists && p.conflict === 'skip') { skipped++; continue; }
-    // 决定写入名（建副本时换名）
     let name = it.name;
     if (it.exists && p.conflict === 'copy') {
       let i = 1; name = `${it.name} (副本)`;
@@ -1347,7 +1235,6 @@ async function doInject(
       injected++;
     }
     const kindKey = it.kind as ManagedKind;
-    // 合并：以旧卡片为基底，新值覆盖非空字段（保留旧 tags/links/inject 等）
     const desc = (it.exists && p.conflict === 'merge')
       ? mergeDesc(kindKey, it.name, it.desc)
       : it.desc;
@@ -1359,7 +1246,6 @@ async function doInject(
     if (writeback) addWb(kindKey, { name, desc, tags: mergedTags });
   }
 
-  // 回写初始数据（按 kind 逐类调 writeInitialItemsForKind）
   let wbSummary = '';
   if (writeback && wbByKind.size) {
     let wbWritten = 0, wbSkipped = 0;
@@ -1374,12 +1260,10 @@ async function doInject(
 
   closeModal2();
   toastr?.success?.(`已注入 ${injected} 项${merged ? `、合并 ${merged} 项` : ''}${copied ? `、建副本 ${copied} 项` : ''}${skipped ? `、跳过 ${skipped} 项` : ''}${wbSummary}`);
-  // 清空已发送的任务池
   clearTasks();
   renderPanel();
 }
 
-// 快照列表 + 回滚（二次确认）。从注入确认面板进入，返回时重建注入确认。
 function openSnapshotsModal(): void {
   const snaps = getSnapshots();
   const rows = snaps.length ? snaps.map(s => {
@@ -1393,15 +1277,30 @@ function openSnapshotsModal(): void {
       <button class="th-btn th-btn-mini th-btn-primary" data-snap-roll="${s.ts}"><i class="fa-solid fa-rotate-left"></i> 回滚</button>
       <button class="th-btn th-btn-mini" data-snap-del="${s.ts}">删</button>
     </div>`;
-  }).join('') : '<div style="padding:14px;color:var(--tx3);font-size:13px;text-align:center">暂无快照（AI 注入覆盖/合并卡片时自动记录）</div>';
+  }).join('') : '<div style="padding:14px;color:var(--tx3);font-size:13px;text-align:center">还没封存时光呢（AI 注入覆盖/合并卡片时自动记录）</div>';
   const html = `<div class="th-ai-snaps" style="padding:14px;display:flex;flex-direction:column;gap:10px;max-height:74vh">
     <div style="font-size:13px;color:var(--tx2);line-height:1.6">注入快照（最近 20 次覆盖/合并前的旧卡片值），可回滚恢复。</div>
     <div style="display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:4px">${rows}</div>
-    <div style="display:flex;justify-content:flex-end"><button class="th-btn" id="th-ai-snap-back">返回</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <button class="th-btn th-btn-mini th-btn-reject" id="th-ai-snap-clear" type="button" style="visibility:${snaps.length?'visible':'hidden'}"><i class="fa-solid fa-trash-can"></i> 清空全部</button>
+      <button class="th-btn" id="th-ai-snap-back" type="button">返回</button>
+    </div>
   </div>`;
   openModal2('注入快照 / 回滚', html, { replace: true });
   qs('#th-ai-snap-back')?.addEventListener('click', () => {
     if (LAST_SEND) openInjectConfirm(LAST_SEND.results); else { closeAllModal2(); renderPanel(); }
+  });
+  qs('#th-ai-snap-clear')?.addEventListener('click', () => {
+    if(!getSnapshots().length) return;
+    void thConfirm({
+      title: '清空全部快照', message: '确认删除所有注入快照？此操作不可恢复。', confirmText: '清空',
+      danger: true,
+    }).then(ok => {
+      if(!ok) return;
+      clearSnapshots();
+      toastr?.success?.('已清空全部快照');
+      openSnapshotsModal();
+    });
   });
   qs('.th-ai-snaps')?.addEventListener('click', (e) => {
     const t = e.target as HTMLElement;
@@ -1419,7 +1318,6 @@ function openSnapshotsModal(): void {
   });
 }
 
-// 回滚二次确认（破坏性）
 function confirmRollback(ts: number): void {
   const html = `<div style="padding:16px;display:flex;flex-direction:column;gap:14px">
     <div style="font-size:13px;color:var(--tx2);line-height:1.7">确认回滚？将把该快照记录的卡片恢复为注入前的旧值（注入前不存在的卡片会被删除）。此操作会覆盖当前这些卡片的内容。</div>
@@ -1433,19 +1331,16 @@ function confirmRollback(ts: number): void {
   qs('#th-ai-roll-go')?.addEventListener('click', () => {
     const r = rollbackSnapshot(ts);
     toastr?.success?.(`已回滚：恢复 ${r.restored} 项${r.deleted ? `、删除 ${r.deleted} 项` : ''}`);
-    closeModal2();      // 关确认，弹回快照列表
-    openSnapshotsModal(); // 刷新快照列表
+    closeModal2();
+    openSnapshotsModal();
   });
 }
-//  - location/event：纯文本——新 desc 非空则用新，否则保留旧。
-//  - stash-*：结构化 JSON——逐字段合并（新值非空覆盖，旧值保留其余）。
 function mergeDesc(kind: ManagedKind, name: string, newDesc: string): string {
   const old = getManagedItems(kind)[name];
   if (!old) return newDesc;
   if (kind === 'location' || kind === 'event') {
     return (newDesc && newDesc.trim()) ? newDesc : old.desc;
   }
-  // stash-*：合并 JSON 字段
   let oldObj: Record<string, any> = {};
   let newObj: Record<string, any> = {};
   try { oldObj = old.desc ? JSON.parse(old.desc) : {}; } catch (e) { void e; }

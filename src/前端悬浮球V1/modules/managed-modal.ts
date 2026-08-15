@@ -13,6 +13,7 @@ import { qs, qsa, esc, escAttr, __doc, closestWithin, enteredWithin, leftWithin 
 import { type ManagedKind, MANAGED_CFG, LINKS_KIND_FIELDS } from '../lib/config';
 // 地点/事件 hover 已抽至 ./hover-tip
 import { showLocHover, hideLocHover } from './hover-tip';
+import { thConfirm, thPrompt } from '../lib/world/ui-kit';
 import {
   type ManagedItemV2,
   type ManagedEntryState,
@@ -240,6 +241,7 @@ export async function disableAllManagedWorldbookEntries(kind:ManagedKind): Promi
 const SORT_PREFS_KEY = '_th_managed_sort_prefs_v1';
 export type SortMode = 'az' | 'za' | 'recent' | 'tag';
 let currentSortMode: Record<ManagedKind, SortMode> = {} as any;
+let mgSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function loadSortMode(kind: ManagedKind): SortMode {
   if (currentSortMode[kind]) return currentSortMode[kind];
@@ -350,7 +352,6 @@ export function getDisplayDesc(desc: string): string {
 const RECENT_LIMIT = 10;            // "最近"模式平铺条目数
 const TOKENS_PER_ENABLED = 50;      // 已开启条目 token 预估系数
 const SCAN_CONTENT_PREVIEW = 100;   // 扫描未绑定条目内容预览长度
-
 function renderManagedCards(kind:ManagedKind, entries: [string, ManagedItemV2][], kindTags: Record<string, Tag>): string {
   // 自定义 stash kind 不在 MANAGED_CFG 里，统一用 getStashKindCfg（返回完整字段）。
   const cfg = getStashKindCfg(kind);
@@ -365,7 +366,6 @@ function renderManagedCards(kind:ManagedKind, entries: [string, ManagedItemV2][]
     const enabled=!!state?.enabled;
     const isFav = !!item.favorite;
 
-    // 世界书绑定三态：绿(开启)、黄(绑定未开启)、灰(未绑定)
     let bindCls = 'unbound';
     if (enabled) bindCls = 'bound enabled';
     else if (bound) bindCls = 'bound partial';
@@ -391,8 +391,10 @@ function renderManagedCards(kind:ManagedKind, entries: [string, ManagedItemV2][]
     actionsHtml += `<button class="th-card-act" data-card-act="copy" title="复制"><i class="fa-solid fa-copy"></i></button>`;
     actionsHtml += `<button class="th-card-act th-card-act-danger" data-card-act="del" title="删除${cfg.label}"><i class="fa-solid fa-xmark"></i></button>`;
 
-    // 删左上角类型图标；名称放最上；绑定点+标签点收进名称行右上角
-    const titleDots = `${isStash ? '' : `<span class="th-bind-dot ${bindCls}"></span>`}${tagDots?`<span class="th-managed-card-tags">${tagDots}</span>`:''}`;
+    /* §11.8 三态:unbound 不挂光片,所以不建元素 */
+    const bmSt = enabled ? 'on' : bound ? 'part' : '';
+    const bookmark = (isStash || !bmSt) ? '' : `<span class="th-bm" data-st="${bmSt}" aria-hidden="true"></span>`;
+    const titleDots = `${bookmark}${tagDots?`<span class="th-managed-card-tags">${tagDots}</span>`:''}`;
     return `<div class="${cls}" data-managed-kind="${kind}" data-managed-name="${escAttr(name)}" data-managed-desc="${escAttr(desc)}" title="${escAttr(title)}">
       <div class="th-managed-card-main" style="flex:1;min-width:0">
         <div class="th-managed-card-title" style="font-weight:700;font-size:14px;line-height:1.3">
@@ -480,7 +482,7 @@ export function renderManagedBuckets(kind: ManagedKind, _idPrefix: string, query
       .sort((a, b) => (b[1].lastEdited || 0) - (a[1].lastEdited || 0))
       .slice(0, RECENT_LIMIT);
     if (!recent.length && parsedRecent.term) {
-      return `<div class="th-empty" style="padding:40px 20px;text-align:center"><i class="fa-solid fa-inbox" style="font-size:24px;color:var(--tx3);display:block;margin-bottom:12px"></i><br>没有找到匹配「${esc(parsedRecent.term)}」的最近条目</div>`;
+      return `<div class="th-empty" style="padding:40px 20px;text-align:center"><i class="fa-solid fa-inbox" style="font-size:24px;color:var(--tx3);display:block;margin-bottom:12px"></i><br>翻遍手账也没找到「${esc(parsedRecent.term)}」呢</div>`;
     }
     return renderManagedCards(kind, recent, kindTags);
   }
@@ -538,13 +540,12 @@ export function renderManagedBuckets(kind: ManagedKind, _idPrefix: string, query
     const bucketName = bucketTag === '' ? '未分类' : bucketTag;
     const bucketColor = bucketTag === '' ? 'var(--tx3)' : `var(--${tag?.color || 'tx3'})`;
 
-    // 桶 header
     h += `<div class="th-tag-group" data-bucket-tag="${escAttr(bucketTag)}">
       <div class="th-tag-group-header" data-collapse-toggle="${escAttr(bucketTag)}" data-collapsed="${isCollapsed}">
-        <i class="fa-solid fa-chevron-down th-tag-group-caret"></i>
         <span class="th-tag-color-swatch th-tag-group-color" style="background:${bucketColor}"></span>
         <span class="th-tag-group-name">${esc(bucketName)}</span>
         <span class="th-tag-group-count">(${bucketItems.length})</span>
+        <i class="fa-solid fa-chevron-down th-tag-group-caret"></i>
       </div>
       <div class="th-tag-group-content">`;
     // 桶内卡片（收藏置顶 + 排序）
@@ -557,9 +558,9 @@ export function renderManagedBuckets(kind: ManagedKind, _idPrefix: string, query
     const total = entries.length;
     const cfg = getStashKindCfg(kind);
     if (total === 0) {
-      h = `<div class="th-empty th-empty-guide" style="padding:40px 20px;text-align:center"><i class="fa-solid fa-folder-open" style="font-size:32px;color:var(--tx3);display:block;margin-bottom:12px"></i><br>暂无${cfg.label}内容<br><span class="th-empty-hint" style="font-size:13px;color:var(--tx3);font-style:normal">点右上角 <i class="fa-solid fa-plus" style="font-size:11px;color:var(--pink)"></i> 新建，或 <i class="fa-solid fa-upload" style="font-size:11px;color:var(--pink)"></i> 导入预设</span></div>`;
+      h = `<div class="th-empty th-empty-guide" style="padding:40px 20px;text-align:center"><i class="fa-solid fa-folder-open" style="font-size:32px;color:var(--tx3);display:block;margin-bottom:12px"></i><br>这里还空空的，还没有${cfg.label}呢<br><span class="th-empty-hint" style="font-size:13px;color:var(--tx3);font-style:normal">点右上角 <i class="fa-solid fa-plus" style="font-size:11px;color:var(--pink)"></i> 新建，或 <i class="fa-solid fa-upload" style="font-size:11px;color:var(--pink)"></i> 导入预设</span></div>`;
     } else {
-      h = `<div class="th-empty" style="padding:40px 20px;text-align:center"><i class="fa-solid fa-inbox" style="font-size:24px;color:var(--tx3);display:block;margin-bottom:12px"></i><br>没有找到匹配「${parsed.term}」的条目${getCurrentFilterTag()?`（标签：${getCurrentFilterTag()}）`:''}</div>`;
+      h = `<div class="th-empty" style="padding:40px 20px;text-align:center"><i class="fa-solid fa-inbox" style="font-size:24px;color:var(--tx3);display:block;margin-bottom:12px"></i><br>翻遍手账也没找到「${parsed.term}」呢${getCurrentFilterTag()?`（标签：${getCurrentFilterTag()}）`:''}</div>`;
     }
   }
 
@@ -614,7 +615,7 @@ async function openManagedModal(kind:ManagedKind, filterTag:string|null=null) {
   const idPrefix=kind==='location'?'th-loc':kind==='event'?'th-event':'th-dlc';
   let h = '';
   h += `<input type="file" id="${idPrefix}-import-file" accept=".json,.txt" style="display:none">`;
-  h += `<input class="th-location-search th-edit-input" type="search" id="${idPrefix}-search" placeholder="搜索${cfg.label}...">`;
+  h += `<div class="th-mgsearch"><span class="th-mgsearch-ico" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span><input class="th-location-search" type="search" id="${idPrefix}-search" placeholder="搜索${cfg.label}..."></div>`;
 
   // 标签筛选栏
   h += renderTagFilterBar(kind, idPrefix);
@@ -782,7 +783,7 @@ function bindManagedModalEvents(kind:ManagedKind, idPrefix:string) {
     toastr?.success?.(`${cfg.label}绑定状态已刷新`);
   });
   qs(`#${idPrefix}-disable-all-btn`)?.addEventListener('click',async()=>{
-    if(!confirm(`确定要关闭所有已绑定的${cfg.label}世界书条目吗？`)) return;
+    if(!await thConfirm({title:`关闭全部${cfg.label}绑定`,message:`确定要关闭所有已绑定的${cfg.label}世界书条目吗？`,confirmText:'全部关闭',danger:true})) return;
     const result=await disableAllManagedWorldbookEntries(kind);
     if(result!==null) rerenderManagedGrid(kind,idPrefix,(qs<HTMLInputElement>(`#${idPrefix}-search`)?.value||'').trim().toLowerCase());
   });
@@ -803,7 +804,7 @@ function bindManagedModalEvents(kind:ManagedKind, idPrefix:string) {
   qs(`#${idPrefix}-import-file`)?.addEventListener('change', function(this:HTMLInputElement){
     if(!this.files||!this.files.length) return;
     const reader=new FileReader();
-    reader.onload=()=>{
+    reader.onload=async()=>{
       const text=reader.result as string;
       const allTags = loadTags();
       const kindTagsByKind: Record<string, Record<string, Tag>> = {};
@@ -819,7 +820,13 @@ function bindManagedModalEvents(kind:ManagedKind, idPrefix:string) {
       const existingCount = candidates.filter(c => getManagedItems(kind)[c.name]).length;
       let overwrite = false;
       if (existingCount > 0) {
-        overwrite = confirm(`检测到 ${existingCount} 条同名${cfg.label}已存在。\n点击「确定」全部覆盖，点击「取消」全部跳过。`);
+        /* 两个按钮都是"继续导入",只差覆盖与否 ⇒ 文案写在按钮上,不靠 message 里的换行说明
+           (th-dlg-body 不解析 \n,原生 confirm 那套换行提示在这儿会挤成一行)。 */
+        overwrite = await thConfirm({
+          title:'同名条目怎么处理',
+          message:`检测到 ${existingCount} 条同名${cfg.label}已存在。`,
+          confirmText:'全部覆盖', cancelText:'全部跳过',
+        });
       }
       for (const { name, item } of candidates) {
         try {
@@ -838,7 +845,9 @@ function bindManagedModalEvents(kind:ManagedKind, idPrefix:string) {
   const searchInput = qs<HTMLInputElement>(`#${idPrefix}-search`);
   if (searchInput) {
     searchInput.addEventListener('input', function(this: HTMLInputElement) {
-      rerenderManagedGrid(kind, idPrefix, this.value.trim().toLowerCase());
+      const q = this.value.trim().toLowerCase();
+      if (mgSearchTimer) clearTimeout(mgSearchTimer);
+      mgSearchTimer = setTimeout(() => rerenderManagedGrid(kind, idPrefix, q), 220);
     });
   }
 
@@ -1105,7 +1114,7 @@ export function bindManagedCardEvents(kind:ManagedKind, idPrefix:string) {
           break;
         }
         case 'del':
-          if(confirm(`确定要删除${cardCfg.label}「${name}」吗？`)){
+          if(await thConfirm({title:`删除${cardCfg.label}`,message:`确定要删除${cardCfg.label}「${name}」吗？`,confirmText:'删除',danger:true})){
             setCurrentManagedItems(cardKind,getManagedItems(cardKind));
             deleteManagedItem(cardKind,name);
             // 删除后留在当前 tab：在"全部"tab 则刷新"全部"，否则留在该 kind（不跳回"全部"）
@@ -1137,7 +1146,7 @@ export function bindManagedCardEvents(kind:ManagedKind, idPrefix:string) {
       const card=del.closest('.th-managed-card') as HTMLElement|null;
       const cardKind=(card?.getAttribute('data-managed-kind')||kind) as ManagedKind;
       const cardCfg=MANAGED_CFG[cardKind]||cfg;
-      if(name&&confirm(`确定要删除${cardCfg.label}「${name}」吗？`)){
+      if(name&&await thConfirm({title:`删除${cardCfg.label}`,message:`确定要删除${cardCfg.label}「${name}」吗？`,confirmText:'删除',danger:true})){
         setCurrentManagedItems(cardKind,getManagedItems(cardKind));
         deleteManagedItem(cardKind,name);
         if(cardKind.startsWith('stash-')) openStashModal(getStatusStashAllTab() ? 'all' : cardKind);
@@ -1521,12 +1530,12 @@ async function openManagedEditModal(kind: ManagedKind, name: string) {
 
       // 删除自定义 token
       qsa('.th-token-delete').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const tokenEl = (btn as HTMLElement).closest('.th-token') as HTMLElement | null;
           if (!tokenEl) return;
           const tokenText = tokenEl.getAttribute('data-token') || '';
-          if (confirm(`确定要删除自定义 token「${tokenText}」吗？`)) {
+          if (await thConfirm({ title: '删除 token', message: `要把自定义 token「${tokenText}」这一页轻轻撕掉吗？`, confirmText: '删除', danger: true })) {
             const customTokens = JSON.parse(localStorage.getItem('_th_custom_tokens') || '[]');
             const filtered = customTokens.filter((t: string) => t !== tokenText);
             localStorage.setItem('_th_custom_tokens', JSON.stringify(filtered));
@@ -1538,13 +1547,13 @@ async function openManagedEditModal(kind: ManagedKind, name: string) {
 
       // 编辑 token（双击编辑）
       qsa('.th-token').forEach(tokenEl => {
-        tokenEl.addEventListener('dblclick', () => {
+        tokenEl.addEventListener('dblclick', async () => {
           const oldToken = tokenEl.getAttribute('data-token') || '';
           if (['{{name}}', '{{desc}}', '{{user}}', '{{char}}'].includes(oldToken)) {
             toastr?.warning?.('内置 token 不可编辑');
             return;
           }
-          const newToken = prompt('编辑 token：', oldToken);
+          const newToken = await thPrompt({ title: '编辑 token', value: oldToken, placeholder: '{{变量名}}' });
           if (newToken && newToken.trim() && newToken.trim() !== oldToken) {
             const trimmed = newToken.trim();
             if (!trimmed.startsWith('{{') || !trimmed.endsWith('}}')) {
@@ -1568,8 +1577,8 @@ async function openManagedEditModal(kind: ManagedKind, name: string) {
     renderTokenList();
 
     // 新建自定义 token 按钮
-    qs('.th-token-add')?.addEventListener('click', () => {
-      const tokenName = prompt('请输入新 token 名称（例如：{{变量名}}）：', '{{newVar}}');
+    qs('.th-token-add')?.addEventListener('click', async () => {
+      const tokenName = await thPrompt({ title: '新建自定义 token', message: '格式必须为 {{变量名}}', value: '{{newVar}}' });
       if (tokenName && tokenName.trim()) {
         const trimmed = tokenName.trim();
         if (!trimmed.startsWith('{{') || !trimmed.endsWith('}}')) {

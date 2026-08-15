@@ -19,6 +19,7 @@ import {
   addManagedItem,
 } from '../lib/managed-store';
 import { renderTagFilterBar, openTagManagerModal } from './tag-manager';
+import { thConfirm } from '../lib/world/ui-kit';
 import {
   collectRuntimeStashData,
   openRuntimeImportModal,
@@ -106,7 +107,7 @@ export function openStashModal(initialTab?: ManagedKind | 'all') {
   let h = `<div class="th-stash-modal">`;
   h += tabRow;
   h += `<input type="file" id="${idPrefix}-import-file" accept=".json,.txt" style="display:none">`;
-  h += `<input class="th-location-search th-edit-input" type="search" id="${idPrefix}-search" placeholder="搜索${cfg.label}...">`;
+  h += `<div class="th-mgsearch"><span class="th-mgsearch-ico" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span><input class="th-location-search" type="search" id="${idPrefix}-search" placeholder="搜索${cfg.label}..."></div>`;
   if (isStashAllTab) {
     // "全部" tab: 按 kind 分组平铺
     h += `<div class="th-managed-grid" id="${idPrefix}-grid" data-kind="all">`;
@@ -150,14 +151,14 @@ function bindStashModalEvents(idPrefix: string, allTabs: ManagedKind[]) {
     });
     // 自定义 kind tab 上的删除按钮（替代右键菜单）— 独立于 tab forEach
     qsa('.th-stash-kind-del').forEach(delBtn => {
-      delBtn.addEventListener('click', (e) => {
+      delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         e.preventDefault();
         const customKind = delBtn.getAttribute('data-del-custom') || '';
         if (!customKind) return;
         const customKinds = loadStashKinds();
         const meta = customKinds[customKind];
-        if (confirm(`确定要删除类别「${meta?.label || customKind}」吗？\n该类别下的卡片将移动到「未分类」。`)) {
+        if (await thConfirm({title:'删除类别',message:`确定要删除类别「${meta?.label || customKind}」吗？该类别下的卡片将移动到「未分类」。`,confirmText:'删除',danger:true})) {
           const moved = deleteStashKind(customKind);
           currentStashTab = 'stash-item';
           toastr?.success?.(`已删除类别：${meta?.label || customKind}${moved ? `，${moved} 张卡片已移至未分类` : ''}`);

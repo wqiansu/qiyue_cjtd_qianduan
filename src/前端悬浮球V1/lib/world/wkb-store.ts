@@ -1,8 +1,5 @@
-// 工作台（wkb）数据层（wkb-store.ts）
-// 定位：通用 AI 造物机。玩家选模板 + 描述 → AI 生成结构化产物（文本卡）→ 唯一出口＝拼进玩家聊天输入框。
-//   **不写任何变量、不绑角色卡结构、不碰 MVU/世界书**。模板只是「给 AI 的输出提纲」，字段可增删改，纯本地。
-// 数据：模板库（内置只读定义 + 玩家自定义/覆盖）、产物库（历史造物，可复用/再投递）、设置（口吻/参考/风格/外观）。
-//   全部落 _th_world_wkb_v1，绝不进存档、绝不动其他 app。
+// 通用 AI 造物机：选模板+描述 → AI 生成结构化产物（文本卡）→ 唯一出口＝拼进玩家聊天输入框。
+//   不写任何变量、不绑角色卡结构、不碰 MVU/世界书。落 _th_world_wkb_v1，不进存档、不动其他 app。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 import { getRoot, safeTriggerSlash } from '../tavern-api';
 

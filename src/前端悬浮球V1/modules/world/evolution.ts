@@ -1,10 +1,4 @@
 // 世界演化（evolution.ts）
-// 定位：对「玩家不在场」的角色（离场 NPC / 联系人 / 自定义）做酒馆正文之外的额外演化。
-//   玩家点「推进演化」→ generateRaw 组 (角色设定 + 历史演化记忆 + 世界时间 + 玩家方向提示)
-//   → 返回演化片段(json_schema:{summary, events[]…}) → 存时间线。
-//   沉淀只走两种：注入聊天框(injectPrompts) + 写世界书条目(syncActorToWorldbook)。不写 MVU 变量。
-// 跨窗口：DOM 全走 qs（parent.document），读全局接口 window→getRoot 兜底。
-// 单 modal SPA：openModal2 只调一次（reset+revive），内部视图/sheet 自渲染，绝不堆叠 modal。
 import { esc, qs } from '../../lib/dom-utils';
 import { openModal2 } from '../../status-bar-init';
 import { thToast, thConfirm, thPrompt } from '../../lib/world/ui-kit';
@@ -776,8 +770,6 @@ const EVO_SET_CATS: ScaffoldCat[] = normalizeScaffoldCats([
   { id: 'mem', canon: 'data' },
 ] as ScaffoldCatDef[]);
 function settingsInnerHtml(): string {
-  // 并入统一设置骨架——nav 用共享 scaffoldNavHtml（.thw-nav 结构，与全部 app 一致）。
-  //   attrPrefix='evo' → 按钮带 data-evo-setcat，沿用现有点击路由；容器仍是 th-evo-setwrap（沉在 sheet 里，token 已解析）。
   const navs = scaffoldNavHtml('evo', EVO_SET_CATS, _setCat);
   return `<div class="th-evo-setwrap">
     <div class="th-evo-setnav-col">${navs}</div>

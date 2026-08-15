@@ -1,14 +1,3 @@
-// 世界套件 —— 工作台（wkb.ts）UI 模块
-// PC 三栏「通用 AI 造物机」，仙宫粉黛。玩家选模板 + 描述 → AI 造出结构化产物 → 唯一出口＝拼进玩家聊天输入框。
-//   左栏(thw-wkb-side)：品牌 / 模板库（常用内置 + 自定义 + 新建）/ 产物库入口 / 设置。
-//   中栏(thw-wkb-forge)：生成台（要造什么 + 语气 + 参考三档 + 临时情境 + 数量 → 生成/手气不错/再来一个）+ 字段编辑器(折叠) + 结果预览。
-//   右栏(thw-wkb-out)：选中产物卡（可就地改字段/锁定重roll）+ 投递区（人称切换 + 呈现体 + 预览 + 塞进输入框/复制/暂存/撤销）+ 暂存篮。
-// **全程不碰 MVU/世界书写入、不动角色卡变量**——纯生成 + 拼进输入框。破限进 ordered_prompts[0]；设置 master-detail 局部刷新。
-// 关键 CSS 类名（供补样式）：
-//   .thw-wkb-app2 .thw-wkb-side .thw-wkb-brand .thw-wkb-nav(.on) .thw-wkb-tpl(.on) .thw-wkb-forge .thw-wkb-out
-//   .thw-wkb-descbox .thw-wkb-toolrow .thw-wkb-fields .thw-wkb-field-edit .thw-wkb-preview .thw-wkb-prod .thw-wkb-prodcard
-//   .thw-wkb-fieldrow .thw-wkb-deliver .thw-wkb-person .thw-wkb-present .thw-wkb-delivbox .thw-wkb-stash .thw-wkb-lib
-//   .thw-wkb-set-body .thw-wkb-set-nav .thw-wkb-set-detail
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { openModal2 } from '../../status-bar-init';
 import { phoneShellHtml, startPhoneClock } from '../../lib/world/phone-shell';
@@ -60,6 +49,7 @@ let _deliverPerson: WkbPerson | null = null; // 投递人称临时覆盖（null=
 let _deliverPresent: WkbPresent | null = null;
 let _lastAppended = '';            // 上次投递追加的文本（供撤销）
 let _lockedFields: Set<string> = new Set(); // 锁定字段（重roll保留）
+let _wkbDebounce: ReturnType<typeof setTimeout> | null = null;
 let _busy = false;
 let _promptEditId: string | null = null;
 let _setCat: SetCat = 'gen';
@@ -713,9 +703,7 @@ async function onSettingsClick(t: HTMLElement): Promise<boolean> {
   // 主题 / 字体
   const th = t.closest('[data-wkb-theme]') as HTMLElement | null;
   if (th) { updateWkbSettings({ theme: th.getAttribute('data-wkb-theme') || 'pink' }); render(); return true; }
-  // 内置模板开关
-  const bt = t.closest('[data-wkb-builtin]') as HTMLElement | null;
-  if (bt) { const id = bt.getAttribute('data-wkb-builtin') || ''; setBuiltinEnabled(id, (bt as HTMLInputElement).checked); return true; }
+  // 内置模板开关走 onChange，click 里不再处理（同一 root 上两个处理器会写两遍 localStorage）
   // 自定义模板改名/删
   const ren = t.closest('[data-wkb-cus-ren]') as HTMLElement | null;
   if (ren) { const id = ren.getAttribute('data-wkb-cus-ren') || ''; const cur = getTemplate(id); const name = await thPrompt({ title: '模板改名', message: '新名称：', value: cur?.name || '' }); if (name != null && String(name).trim()) { updateCustomTemplate(id, { name: String(name).trim() }); patchSetCat('tpl'); } return true; }
@@ -775,8 +763,11 @@ function onInput(e: Event): void {
     const i = Number(fv.getAttribute('data-wkb-fval')); const p = curProduct();
     if (p && p.fields[i]) {
       p.fields[i].value = fv.value;
-      if (getProduct(p.id)) updateProduct(p.id, { fields: p.fields });
-      else persistCands();
+      if (_wkbDebounce) clearTimeout(_wkbDebounce);
+      _wkbDebounce = setTimeout(() => {
+        if (getProduct(p.id)) updateProduct(p.id, { fields: p.fields });
+        else persistCands();
+      }, 220);
       // 更新投递预览框（不整树重渲）
       const box = rootEl()?.querySelector('[data-wkb-delivbox]') as HTMLElement | null;
       if (box) box.textContent = deliverText(p);
@@ -790,10 +781,17 @@ function onInput(e: Event): void {
     const tpl = curTpl(); const fs = tpl.fields.slice();
     if (feLabel) { const i = Number(feLabel.getAttribute('data-wkb-fe-label')); if (fs[i]) fs[i] = { ...fs[i], label: feLabel.value }; }
     if (feDesc) { const i = Number(feDesc.getAttribute('data-wkb-fe-desc')); if (fs[i]) fs[i] = { ...fs[i], desc: feDesc.value }; }
-    setTemplateFields(tpl.id, fs); return;
+    if (_wkbDebounce) clearTimeout(_wkbDebounce);
+    _wkbDebounce = setTimeout(() => setTemplateFields(tpl.id, fs), 220);
+    return;
   }
   // 产物库搜索
-  if (t.classList.contains('thw-wkb-lib-search')) { _libQuery = (t as HTMLInputElement).value; const grid = rootEl()?.querySelector('.thw-wkb-libgrid'); if (grid) render(); return; }
+  if (t.classList.contains('thw-wkb-lib-search')) {
+    _libQuery = (t as HTMLInputElement).value;
+    if (_wkbDebounce) clearTimeout(_wkbDebounce);
+    _wkbDebounce = setTimeout(() => { const grid = rootEl()?.querySelector('.thw-wkb-libgrid'); if (grid) render(); }, 220);
+    return;
+  }
 }
 function onChange(e: Event): void {
   const t = e.target as HTMLElement; if (!t) return;
@@ -847,7 +845,7 @@ try {
   const w = (typeof window !== 'undefined' ? window : globalThis) as any;
   w.__th_world_wkb__ = { openWorkbench };
 } catch (e) { void e; }
-// 抑制未使用告警（保留给后续扩展）
+// 抑制未使用告警
 void updateProduct; void goForge; void listContactsForApp;
 
 

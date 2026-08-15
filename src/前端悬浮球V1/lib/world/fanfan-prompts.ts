@@ -1,5 +1,3 @@
-// 饭饭（fanfan）AI 提示词（fanfan-prompts.ts）
-// 导演笔记式、高信息密度、全女性百合生态、设定读绑定世界书。仙宫版大众点评：探店/口碑/榜单/笔记。
 // 所有提示词共用 FAN_RULE（生态铁律）；破限置顶；生态浓度/世界信息由调用方填充。
 import { registerPromptTemplate } from './world-prompts';
 import { buildJailbreak } from './prompt-kit';

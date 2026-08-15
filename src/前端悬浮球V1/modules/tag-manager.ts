@@ -4,6 +4,7 @@
 // showRecentOnly/showFavOnly/batchMode/batchSelection 为对象引用型全局，仅属性读写，import 同一引用即可。
 // ================================================================
 import { esc, escAttr, qs, qsa } from '../lib/dom-utils';
+import { thConfirm } from '../lib/world/ui-kit';
 import {
   type ManagedKind,
   MANAGED_CFG,
@@ -134,10 +135,10 @@ function bindTagManagerEvents(kind: ManagedKind, idPrefix: string) {
 
   // 删除标签按钮
   qsa('[data-delete-tag]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const tagName = btn.getAttribute('data-delete-tag') || '';
-      if (confirm(`确定要删除标签「${tagName}」吗？\n该标签将从所有已打标的卡片上移除。`)) {
+      if (await thConfirm({title:'删除标签',message:`确定要删除标签「${tagName}」吗？该标签将从所有已打标的卡片上移除。`,confirmText:'删除',danger:true})) {
         deleteTag(kind, tagName);
         // 从所有 item 上移除该标签
         const items = getManagedItems(kind);
@@ -154,22 +155,22 @@ function bindTagManagerEvents(kind: ManagedKind, idPrefix: string) {
 
   // 批量关世界书按钮（仅非 stash kind）
   qsa('[data-batch-disable-tag]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const tagName = btn.getAttribute('data-batch-disable-tag') || '';
       const count = countItemsWithTag(kind, tagName);
-      if (!confirm(`关闭「${tagName}」下 ${count} 个${MANAGED_CFG[kind].label}对应的世界书条目？\n(可重新打开)`)) return;
+      if (!await thConfirm({title:'批量关闭',message:`关闭「${tagName}」下 ${count} 个${MANAGED_CFG[kind].label}对应的世界书条目？可重新打开。`,confirmText:'关闭',danger:true})) return;
       void disableManagedByTag(kind, tagName);
     });
   });
 
   // 批量开世界书按钮（仅非 stash kind）
   qsa('[data-batch-enable-tag]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const tagName = btn.getAttribute('data-batch-enable-tag') || '';
       const count = countItemsWithTag(kind, tagName);
-      if (!confirm(`开启「${tagName}」下 ${count} 个${MANAGED_CFG[kind].label}对应的世界书条目？\n(可重新关闭)`)) return;
+      if (!await thConfirm({title:'批量开启',message:`开启「${tagName}」下 ${count} 个${MANAGED_CFG[kind].label}对应的世界书条目？可重新关闭。`,confirmText:'开启'})) return;
       void enableManagedByTag(kind, tagName);
     });
   });

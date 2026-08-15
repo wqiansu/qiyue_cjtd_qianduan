@@ -1,7 +1,3 @@
-// 小剧场数据层（theater-store.ts）
-// 一出「戏（Play）」= 一套预设/类型 + 一组演员（只用现有角色）+ 若干「幕（Act）」+ 基调/放飞度/模式。
-// 幕流混排旁白/台词/舞台提示/弹幕/NG/彩蛋/分支。数据纯本地 _th_world_theater_v1。
-// 兼容旧结构（TheaterScript{refs,scenes,styleId,mode:'single'|'multi'}）：读取时自动迁移为 Play。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 import type { PlayType } from './theater-presets';
 

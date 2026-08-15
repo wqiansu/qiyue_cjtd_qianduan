@@ -1,93 +1,78 @@
-// 世界演化数据层（evolution-store）
-// 世界演化 APP 的纯数据读写，落 _th_world_evolution_v1（单 blob）。不碰 DOM、不碰 generate。
-//   - 演化对象 EvoActor：来自离场 NPC / 联系人 / 自定义；每个对象一条独立演化时间线。
-//   - 演化条目 EvoEntry：一次「推进」的产出（摘要 + 关键事件 + 可选变量变化 + 注入状态）。
-// 记忆 sessionId 约定：'evo_' + actorId（appId='evolution'），由 evolution.ts 建会话时 ensureSession。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
-export type EvoSource = 'npc' | 'contact' | 'custom' | 'world'; // world=世界背景演化线程（按维度推演，非具体角色）
-// 角色独有世界书条目引用（推演时拼进该角色的设定，让 ta 的演化贴合专属设定）
+export type EvoSource = 'npc' | 'contact' | 'custom' | 'world';
 export type EvoWbRef = { book: string; uid: number; name: string };
 
-// 开放式自主目标（火候链）
-//   每个对象可持有若干「盘算 / 心愿 / 正在张罗的事」，由 AI 自主生成与推进，玩家不写死方向。
-//   stage 是火候阶段：0 起念 → 1 张罗中 → 2 临门一脚 → 3 已办成 → 4 余韵收尾。
+// 每个对象可持有若干开放式目标（盘算/心愿/正在张罗的事），由 AI 自主生成与推进
 export const GOAL_STAGES = ['起念', '张罗中', '临门一脚', '已办成', '余韵'] as const;
 export type EvoGoal = {
   id: string;
-  text: string;          // 这桩盘算/心愿是什么（AI 自主拟定，开放式）
-  stage: number;         // 0-4 火候阶段（见 GOAL_STAGES）
-  secret?: boolean;      // 私密盘算（无目击不外泄，回流时默认压制）
+  text: string;
+  stage: number;         // 0-4 火候阶段（GOAL_STAGES）
+  secret?: boolean;
   updatedAt: number;
-  resolved?: boolean;    // 已收尾/作罢
+  resolved?: boolean;
 };
-// 三档回流：背景（只做设定不打扰）/ 传闻（可被他人提及）/ 闯入（可主动找上主角）
 export type EvoReflow = 'background' | 'rumor' | 'intrude';
 export const REFLOW_LABEL: Record<EvoReflow, string> = { background: '纯背景', rumor: '可成传闻', intrude: '可闯入' };
 
 export type EvoEntry = {
   id: string;
   ts: number;
-  worldTime?: string;        // 演化锚定的世界时间（如「第三日 黄昏」），玩家给或读世界信息
-  span?: string;             // 这段时间跨度的人类描述（如「约半天」）
-  summary: string;           // 这段离场期间发生了什么（主文本）
-  events: string[];          // 关键事件点
-  injected: boolean;         // 本条是否已纳入注入（持久注入取最近若干条）
-  batchId?: string;          // 同一次「批量/联合推演」产出的条目共享一个 batchId（便于关联展示）
-  mood?: string;             // 该对象此刻的心境/状态一句话（驱动卡片火候条与关系网）
-  goalsTouched?: string[];   // 本轮推进了哪些目标（目标文本快照，供时间线展示）
-  rumor?: string;            // 传闻档：若本轮产生了「可外传的风声」，这里是其一句话版本（可空）
-  reflow?: EvoReflow;        // 本条产出时的回流档（继承对象的 reflowDefault）
-  collided?: string[];       // 本轮与谁产生了交集（对象名，联合推演时填）
+  worldTime?: string;
+  span?: string;
+  summary: string;
+  events: string[];
+  injected: boolean;         // 持久注入取最近若干条
+  batchId?: string;
+  mood?: string;
+  goalsTouched?: string[];
+  rumor?: string;
+  reflow?: EvoReflow;
+  collided?: string[];
 };
 export type EvoActor = {
   id: string;
   source: EvoSource;
-  sourceRef?: string;        // npc: NPC 名；contact: 联系人 id；custom/world: 空
+  sourceRef?: string;
   name: string;
-  persona?: string;          // 角色设定（注入演化 system 的身份依据）
-  worldbookRefs?: EvoWbRef[];// 该角色专属世界书条目（推演时附加进设定）
-  extraNote?: string;        // 玩家补充的额外设定/约束（推演时附加）
-  dimension?: string;        // world 线程的演化维度（如「势力动向」「民生舆论」「天候环境」）
-  presetKey?: string;        // 内置预设来源 key（如 'sxtd.worldview'），用于去重/标识
-  customPrompt?: string;     // 该对象专属内置提示词文本（覆盖默认 advance/world 模板）
-  useCustomPrompt?: boolean; // 勾选=用 customPrompt；不勾=用默认模板
-  injectEnabled: boolean;    // 是否把该角色的演化结果持续注入酒馆正文生成
-  timeline: EvoEntry[];      // 演化时间线（旧→新）
+  persona?: string;
+  worldbookRefs?: EvoWbRef[];
+  extraNote?: string;
+  dimension?: string;
+  presetKey?: string;
+  customPrompt?: string;
+  useCustomPrompt?: boolean;
+  injectEnabled: boolean;
+  timeline: EvoEntry[];
   createdAt: number;
   updatedAt: number;
-  goals?: EvoGoal[];         // 该对象的开放式目标/盘算（AI 自主拟定与推进）
-  reflowDefault?: EvoReflow; // 该对象新演化默认回流档（默认 background 纯背景）
-  relations?: { to: string; tie: string }[]; // 与其他对象的关系（to=对象名，tie=一句话关系；AI 可更新）
-  growth?: EvoGrowth[];      // 成长轴：随时间累积的长期变化里程碑（技艺/境界/心结/黑历史，区别于瞬时 mood）
-  pinned?: boolean;          // 置顶（节拍/世界线列表优先展示）
+  goals?: EvoGoal[];
+  reflowDefault?: EvoReflow;
+  relations?: { to: string; tie: string }[];
+  growth?: EvoGrowth[];
+  pinned?: boolean;
 };
-// 成长里程碑：角色在漫长演化里沉淀下来的「可见变化」。
 export type EvoGrowth = { ts: number; worldTime?: string; kind: EvoGrowthKind; text: string };
 export type EvoGrowthKind = 'skill' | 'realm' | 'knot' | 'past' | 'bond';
 export const GROWTH_KIND_LABEL: Record<EvoGrowthKind, string> = {
   skill: '技艺', realm: '境界', knot: '心结', past: '过往', bond: '羁绊',
 };
-// 演化订阅组：固定一组对象（角色组或地点组），正文每推进 N 楼自动推进一次。
-//   mode='packed' 拼推（一次 API 推全组）/'fine' 精推（逐个单独 API，质量优先）。
 export type EvoSubMode = 'packed' | 'fine';
 export type EvoSubscription = {
   id: string;
-  name: string;             // 订阅组名（玩家命名，如「学园三人组」「西街一带」）
-  actorIds: string[];       // 组内对象 id
+  name: string;
+  actorIds: string[];
   everyFloors: number;      // 正文每推进 N 楼自动推进一次（0=仅手动）
-  mode: EvoSubMode;         // 拼推 / 精推
-  span: string;             // 每次自动推进的时间跨度描述
+  mode: EvoSubMode;
+  span: string;
   enabled: boolean;
-  lastFloor: number;        // 上次触发时的楼层
+  lastFloor: number;
   createdAt: number;
 };
-// 世界事件/历法：跨对象的「全世界都受影响」的节庆/大事（学园祭、总选举、节气）。
-// 事件阶段机——kind 决定阶段链，stage 是链上的索引。
-//   冲突型：萌芽→发酵→逼近→已爆发；进展型：筹备→执行→关键→已完成。
-//   festive 三态：预热→当天→余韵（节日驱动事件用）。
-//   relationship 关系链：暧昧→捅破→在一起/闹掰（两个对象之间的感情线）。
-//   mystery 悬念线：伏笔→线索→揭晓（埋钩子的谜题线）。fromFestival 记来源节日名。
+// 事件阶段机：kind 决定阶段链，stage 是链上的索引。
+// 冲突型 萌芽→发酵→逼近→已爆发；进展型 筹备→执行→关键→已完成；festive 预热→当天→余韵；
+// relationship 暧昧→试探→捅破→尘埃落定；mystery 伏笔→线索浮现→逼近真相→揭晓。fromFestival 记来源节日名
 export type EvoEventKind = 'conflict' | 'progress' | 'festive' | 'relationship' | 'mystery';
 export const EVENT_STAGES: Record<EvoEventKind, string[]> = {
   conflict: ['萌芽', '发酵', '逼近', '已爆发'],
@@ -98,59 +83,56 @@ export const EVENT_STAGES: Record<EvoEventKind, string[]> = {
 };
 export type EvoWorldEvent = {
   id: string;
-  name: string;            // 事件名
-  phase: string;           // 兼容旧字段：当前阶段文字（与 stage 同步维护）
-  desc: string;            // 一句话描述
-  kind?: EvoEventKind;     // 事件类型（决定阶段链）
-  stage?: number;          // 阶段链索引
-  fromFestival?: string;   // 由哪个节日驱动而来（可空）
+  name: string;
+  phase: string;           // 当前阶段文字（与 stage 同步维护）
+  desc: string;
+  kind?: EvoEventKind;
+  stage?: number;
+  fromFestival?: string;
   updatedAt: number;
 };
-// 突发事件（AI 加权·去骰子·带冷却）：从现有维度长出的应景突发。
+// 突发（AI 加权·去骰子·带冷却）
 export type WIncidentSeed = { hint: string; cooldownTurn: number };
-// 编年史：把里程碑级的演化沉淀成「全世界大事记」，供回归简报与长期连贯。
 export type EvoChronicle = {
   id: string;
   ts: number;
   worldTime?: string;
-  text: string;            // 一句话编年（如「学园祭筹备启动」「A 与 B 冰释前嫌」）
-  actorName?: string;      // 归属对象（可空=世界级）
+  text: string;
+  actorName?: string;
 };
 export type EvolutionData = {
   actors: EvoActor[];
-  subscriptions?: EvoSubscription[];   // 订阅组
-  worldEvents?: EvoWorldEvent[];       // 世界事件/历法
-  chronicle?: EvoChronicle[];          // 编年史/大事记
-  clockTurn?: number;                  // 统一世界时钟（演化轮次累计，跨对象共享的「时间刻度」）
-  lastReturnFloor?: number;            // 上次生成回归简报时的正文楼层
+  subscriptions?: EvoSubscription[];
+  worldEvents?: EvoWorldEvent[];
+  chronicle?: EvoChronicle[];
+  clockTurn?: number;
+  lastReturnFloor?: number;
 };
 
 const BLANK: EvolutionData = { actors: [], subscriptions: [], worldEvents: [], chronicle: [], clockTurn: 0, lastReturnFloor: 0 };
 
-// ==================== 世界演化全局配置 ====================
-// 落 _th_world_evo_config_v1（已纳入 _th_world_ 前缀整包导出）。
 export type EvoConfig = {
-  aiPresetName: string;     // 推演用 API 预设（空=跟随当前/默认）
-  readFloors: number;       // 推演时附带的酒馆正文楼层数（0=不读）
-  injectRecent: number;     // 持久注入时附带的最近演化条数（默认 3）
-  maxBatch: number;         // 单次批量/联合推演最多角色数（默认 6）
-  globalWbRefs: EvoWbRef[]; // 默认绑定的世界书条目（全局，所有推演都附带——世界观锚点）
-  tonePrompt?: string;      // 语气/笔调预设，附加到每次推演 system 末尾
-  personaId?: string;       // 复用 API 设置里的人格库（空=不启用），拼到推演 system 笔调块
-  styleId?: string;         // 复用 API 设置里的风格库（空/default=不启用），拼到推演 system 笔调块
+  aiPresetName: string;
+  readFloors: number;
+  injectRecent: number;
+  maxBatch: number;
+  globalWbRefs: EvoWbRef[];
+  tonePrompt?: string;
+  personaId?: string;
+  styleId?: string;
   autoInterval?: number;    // 正文每推进 N 楼自动推进一次世界背景演化（0=关）
-  lastFloor?: number;       // 上次自动触发时的楼层
-  toneKey?: string;         // 基调透镜预设 key（默认 'youth' 青春喜剧）
-  defaultReflow?: EvoReflow;// 新建对象/新演化的默认回流档（默认 background 纯背景）
-  defaultSubMode?: EvoSubMode; // 订阅组默认推演模式（默认 packed 拼推）
-  rippleEnabled?: boolean;  // 全 app 涟漪总开关：把够格的演化外溢到微博/微信等（默认开）
-  rippleWeibo?: boolean;    // 涟漪·微博公域讨论分档（默认开；可传闻/可闯入都会发一条微博）
-  rippleWechat?: boolean;   // 涟漪·微信私聊闯入分档（默认开；仅可闯入且是通讯录里的具体角色）
-  rippleNotify?: boolean;   // 涟漪发生时给一条轻 toast 回执（默认开，便于知道额度花在哪）
-  returnBriefOn?: boolean;  // 回归简报：玩家久离后自动汇总「你不在时世界发生了什么」（默认开）
-  returnEveryFloors?: number; // 回归简报轻提示阈值：正文比上次简报多推进 N 楼后，在演化首页给一条软提示（0=关，默认 30）
-  intensity?: number;       // 演化烈度阀 0-100：越高事件越大、转折越多（默认 45 偏日常）
-  genreKey?: string;        // 世界线题材（一键换装，默认本卡的仙侠+校园混合）
+  lastFloor?: number;
+  toneKey?: string;
+  defaultReflow?: EvoReflow;
+  defaultSubMode?: EvoSubMode;
+  rippleEnabled?: boolean;
+  rippleWeibo?: boolean;
+  rippleWechat?: boolean;
+  rippleNotify?: boolean;
+  returnBriefOn?: boolean;
+  returnEveryFloors?: number;
+  intensity?: number;
+  genreKey?: string;
 };
 export const DEFAULT_EVO_CONFIG: EvoConfig = {
   aiPresetName: '', readFloors: 0, injectRecent: 3, maxBatch: 6, globalWbRefs: [], tonePrompt: '', personaId: '', styleId: '', autoInterval: 0, lastFloor: 0,
@@ -158,10 +140,13 @@ export const DEFAULT_EVO_CONFIG: EvoConfig = {
 };
 const EVO_CFG_KEY = '_th_world_evo_config_v1';
 let _cfgCache: EvoConfig | null = null;
+let _cfgRaw: string | null = null;
 export function getEvoConfig(): EvoConfig {
-  if (_cfgCache) return _cfgCache;
-  const raw = readWorldJson<Partial<EvoConfig>>(EVO_CFG_KEY, {});
-  _cfgCache = { ...DEFAULT_EVO_CONFIG, ...(raw || {}) };
+  const raw = localStorage.getItem(EVO_CFG_KEY);
+  if (_cfgCache && raw === _cfgRaw) return _cfgCache;
+  _cfgRaw = raw;
+  const parsed = readWorldJson<Partial<EvoConfig>>(EVO_CFG_KEY, {});
+  _cfgCache = { ...DEFAULT_EVO_CONFIG, ...(parsed || {}) };
   if (!Array.isArray(_cfgCache.globalWbRefs)) _cfgCache.globalWbRefs = [];
   return _cfgCache;
 }
@@ -169,12 +154,10 @@ export function saveEvoConfig(patch: Partial<EvoConfig>): EvoConfig {
   const next = { ...getEvoConfig(), ...patch };
   _cfgCache = next;
   writeWorldJson(EVO_CFG_KEY, next);
+  _cfgRaw = localStorage.getItem(EVO_CFG_KEY);
   return next;
 }
 
-// ==================== 基调透镜预设 ====================
-// 每个基调给一段「定调指令」，拼进推演 system（玩家可换、可叠加自定义 tonePrompt）。
-// 默认 youth=青春喜剧。所有预设都守「明亮无阴暗底线」，但风味各异。
 export type EvoTone = { key: string; name: string; emoji: string; directive: string };
 export const EVO_TONES: EvoTone[] = [
   {
@@ -206,7 +189,6 @@ export function getEvoTone(key?: string): EvoTone {
   return EVO_TONES.find(t => t.key === key) || EVO_TONES[0];
 }
 
-// 世界背景演化的默认维度（玩家添加 world 线程时可选/自定义）
 export const WORLD_DIMENSIONS = ['势力动向', '民生经济', '天候环境', '暗流事件', '传闻舆论'] as const;
 
 function uid(p = 'e'): string { return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`; }
@@ -214,7 +196,6 @@ function uid(p = 'e'): string { return `${p}_${Date.now().toString(36)}_${Math.r
 function read(): EvolutionData {
   const d = readWorldJson<EvolutionData>(WORLD_LS_KEYS.evolution, BLANK);
   if (!d || !Array.isArray(d.actors)) return { actors: [], subscriptions: [], worldEvents: [], chronicle: [], clockTurn: 0, lastReturnFloor: 0 };
-  // 向后兼容：补全可能缺失的集合字段
   if (!Array.isArray(d.subscriptions)) d.subscriptions = [];
   if (!Array.isArray(d.worldEvents)) d.worldEvents = [];
   if (!Array.isArray(d.chronicle)) d.chronicle = [];
@@ -257,7 +238,6 @@ export function ensureActor(a: { source: EvoSource; sourceRef?: string; name: st
   return created;
 }
 
-// 更新某对象的「角色配置」（专属世界书条目 / 额外设定 / 人设 / 维度 / 内置提示词 / 提示词开关 / 回流档 / 置顶）。不动时间线。
 export function updateActorConfig(id: string, patch: Partial<Pick<EvoActor, 'persona' | 'worldbookRefs' | 'extraNote' | 'dimension' | 'name' | 'customPrompt' | 'useCustomPrompt' | 'reflowDefault' | 'pinned' | 'goals' | 'relations'>>): void {
   const d = read();
   const a = d.actors.find(x => x.id === id); if (!a) return;
@@ -330,11 +310,9 @@ export function buildInjectText(actorId: string, recent = 3): string {
   return `【世界演化·${a.name}】玩家不在场期间，${a.name} 经历了：\n${lines.join('\n')}${tail}`;
 }
 
-// ==================== 统一世界时钟 ====================
 export function getClockTurn(): number { return read().clockTurn || 0; }
 export function tickClock(by = 1): number { const d = read(); d.clockTurn = (d.clockTurn || 0) + by; write(d); return d.clockTurn; }
 
-// ==================== 目标/盘算 ====================
 export function setActorGoals(actorId: string, goals: EvoGoal[]): void {
   const d = read(); const a = d.actors.find(x => x.id === actorId); if (!a) return;
   a.goals = goals; a.updatedAt = Date.now(); write(d);
@@ -361,7 +339,6 @@ export function mergeActorGoals(actorId: string, incoming: { text: string; stage
   a.updatedAt = Date.now(); write(d);
 }
 
-// ==================== 关系网 ====================
 export function mergeActorRelations(actorId: string, rels: { to: string; tie: string }[]): void {
   if (!rels || !rels.length) return;
   const d = read(); const a = d.actors.find(x => x.id === actorId); if (!a) return;
@@ -374,7 +351,7 @@ export function mergeActorRelations(actorId: string, rels: { to: string; tie: st
   }
   a.relations = cur.slice(0, 16); a.updatedAt = Date.now(); write(d);
 }
-// 成长轴：把本轮产出的长期变化里程碑并入（按文本去重，最多留 30 条，新→旧靠后）
+// 成长轴：把本轮产出的长期变化里程碑并入（按文本去重，最多留 30 条）
 export function mergeActorGrowth(actorId: string, items: { kind?: string; text: string; worldTime?: string }[]): void {
   if (!items || !items.length) return;
   const d = read(); const a = d.actors.find(x => x.id === actorId); if (!a) return;
@@ -390,7 +367,6 @@ export function mergeActorGrowth(actorId: string, items: { kind?: string; text: 
   a.growth = cur.slice(-30); a.updatedAt = Date.now(); write(d);
 }
 
-// ==================== 订阅组 ====================
 export function getSubscriptions(): EvoSubscription[] { return (read().subscriptions || []).slice(); }
 export function addSubscription(s: Omit<EvoSubscription, 'id' | 'createdAt' | 'lastFloor'>): EvoSubscription {
   const d = read();
@@ -405,7 +381,6 @@ export function deleteSubscription(id: string): void {
   const d = read(); d.subscriptions = (d.subscriptions || []).filter(x => x.id !== id); write(d);
 }
 
-// ==================== 世界事件/历法（事件阶段机）====================
 export function getWorldEvents(): EvoWorldEvent[] { return (read().worldEvents || []).slice(); }
 export function upsertWorldEvent(e: { id?: string; name: string; phase?: string; desc: string; kind?: EvoEventKind; stage?: number; fromFestival?: string }): void {
   const d = read(); d.worldEvents ||= [];

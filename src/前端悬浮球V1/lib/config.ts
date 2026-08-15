@@ -1,4 +1,3 @@
-// 纯常量配置：初始化后不变的 const 数据 + 纯函数 pickExtraAttrColor，无可变状态/DOM/副作用。
 export type ManagedKind = 'location'|'event'|'dlc'|'stash-item'|'stash-skill'|'stash-status'|'stash-clothing'|'stash-uncategorized'|`stash-custom-${string}`;
 
 export const ATTR_KEYS = ['实力','魅力','智慧','专注','学识','交流','文艺','经营','手工','家务'] as const;
@@ -27,7 +26,6 @@ export const NPC_ICON_CFG = [
   {key:'基础外貌',icon:'fa-solid fa-eye',label:'基础外貌'},
 ] as const;
 export const AVATAR_COLORS = ['#e891b9','#b89ae0','#8bb8d6','#8ec5a4','#f0b878','#d088a8','#9898d0','#68b0c8','#68b898','#e8a860'];
-// 额外属性颜色集合（淡粉/糖果色系）
 export const EXTRA_ATTR_COLORS = [
   'linear-gradient(90deg,#f0a0b8,#f5c0d8)',
   'linear-gradient(90deg,#e8a0c0,#f0c8e0)',
@@ -53,7 +51,6 @@ export const MANAGED_CFG: Record<ManagedKind,{prefix:string;label:string;storage
   'stash-uncategorized': { prefix:'', label:'未分类', storageName:'储藏间·未分类', icon:'fa-solid fa-box', storageKey:'_th_stash_uncategorized_v1', bindsWorldbook:false, defaultInject:'<使用{{name}}：{{desc}}>' },
 };
 
-// 标签颜色调色板：只保留鲜艳的主题色，移除接近白色的文本色和背景色
 export const TAG_COLOR_PALETTE = [
   'pink', 'pink2',
   'lav', 'lav2',
@@ -64,7 +61,6 @@ export const TAG_COLOR_PALETTE = [
   'blue', 'blue2',
 ];
 
-// 标签预设（新建标签时快速选择）
 export const TAG_PRESETS = [
   { name: '主线', color: 'pink', desc: '推动剧情发展的关键内容' },
   { name: '支线', color: 'lav', desc: '可选的分支任务' },
@@ -105,7 +101,6 @@ export const LINKS_KIND_FIELDS: Record<'location' | 'event' | 'dlc', 'locations'
 // 统一 localStorage key 字典：集中登记所有初始化相关 _th_* key，供备份枚举（exportInitBackup）按图索骥。
 // 头像/画廊/fab 状态/外观等非「初始化数据」不在备份范围。
 export const INIT_LS_KEYS = {
-  // managed 卡片覆盖（location/event/dlc/stash-*），对应 MANAGED_CFG[*].storageKey
   managed: ['_th_locations_v2', '_th_events_v1', '_th_dlcs_v1', '_th_stash_items_v1', '_th_stash_skills_v1', '_th_stash_statuses_v1', '_th_stash_clothing_v1', '_th_stash_uncategorized_v1'] as string[],
   // 自定义 stash kind 卡片（动态 key 前缀，备份时按前缀扫 localStorage）
   customStashPrefix: '_th_stash_custom_',
@@ -118,7 +113,6 @@ export const INIT_LS_KEYS = {
   aiSnapshots: '_th_ai_snapshots_v1',
   aiPlans: '_th_ai_plans_v1',
   aiStyle: '_th_ai_style_v1',
-  // 风格自定义/override + 头部人格（身份赋予）+ 当前人格
   aiStylesCustom: '_th_ai_styles_custom_v1',
   aiStyleOverrides: '_th_ai_style_overrides_v1',
   aiPersonas: '_th_ai_personas_v1',
@@ -131,11 +125,17 @@ export const INIT_LS_KEYS = {
   // 完整 key 列表见 lib/world/world-store.ts getWorldStorageKeys）。
   worldConfig: '_th_world_config_v1',
   worldPrefix: '_th_world_',
+  // AI 增量总结/破限词设置（ai-summary-store.ts）
+  aiIncrMap: '_th_ai_incr_map_v1',
+  aiIncrEnabled: '_th_ai_incr_enabled_v1',
+  aiJailbreaks: '_th_ai_jailbreaks_v1',
+  aiJbOverrides: '_th_ai_jb_overrides_v1',
+  aiJbActive: '_th_ai_jb_active_v1',
+  // 地图四份存储（计划表 §6.1）。与世界演化的 _th_world_places_v1 无关（D3）。
+  mapKeys: ['_th_map_layout_v2', '_th_map_log_v1', '_th_map_art_v1', '_th_map_cfg_v1'] as string[],
 };
-// 备份快照格式版本号
 export const INIT_BACKUP_FORMAT = 'th-init-backup-v1';
 
-// 储藏间 kind → 对应变量路径字段名
 export const STASH_RUNTIME_FIELD: Record<string, string> = {
   'stash-item': '拥有物品',
   'stash-skill': '拥有技能',
@@ -318,7 +318,6 @@ export type AiPromptConstraints = {
 // 头部人格（身份赋予，置于全部提示词最前）。人格只影响语气与风趣点评，结构化字段仍须严格遵守格式契约。
 export type AiPersona = { id: string; name: string; persona: string; builtin: boolean };
 
-// 人格库在 lib/personas.ts，此处再导出，外部引用不变。
 export { AI_PERSONAS, PERSONA_GUARD } from './personas';
 
 // 破限提示词：作为「提示词排列第一位」的独立 system 消息（ordered_prompts[0]），排在 人格 + 系统提示词 + 风格 之前。

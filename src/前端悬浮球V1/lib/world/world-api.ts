@@ -1,9 +1,3 @@
-// 套件独立 API 管理（world-api.ts）
-// 套件 API 与外部状态栏 API **完全独立隔离**。各 app 生成一律走套件自有预设，
-//   未配置时明确提示去「设置→API」配，不静默回退状态栏。
-// 保留「从状态栏一键导入预设」便捷入口（仅复制，不联动）。
-// 预设结构与状态栏 ApiPreset 同构（modules/api-settings.ts），保证导入是直接复制。
-// 纯数据层，不碰 DOM。key：_th_world_api_v1（预设列表）/ _th_world_api_active_v1（活动预设名）。
 import { readWorldJson, writeWorldJson } from './world-store';
 import { getRoot } from '../tavern-api';
 

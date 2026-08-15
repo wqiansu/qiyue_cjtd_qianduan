@@ -1,10 +1,6 @@
-// 酒馆环境预设共享层（preset-env）。
-// 把对酒馆 preset / generate 全局接口的访问集中封装，给 api-settings 面板和 ai-summarize 共用。
-// 两维度正交：① API 连接（api-settings 活动预设→custom_api）× ② 提示词预设（选酒馆预设名→preset_name）。
+// 酒馆环境预设共享层：集中封装对酒馆 preset / generate 全局接口的访问。
 // 全局接口（getPresetNames/getLoadedPresetName/getPreset/loadPreset/generateRaw/generate）在 @types/function ambient 声明，
 // 但脚本运行在 iframe，需走 getRoot() 取 parent window 兜底（同 safeGetWorldbook 范式）。
-// 命令式 innerHTML + openModal2，不引 Vue。严格向下兼容：不改现有 _th_api_* key、不破坏现有函数签名。
-// ================================================================
 import { getRoot } from './tavern-api';
 import { __doc } from './dom-utils';
 
@@ -80,7 +76,6 @@ export function envLoadPreset(name: string): boolean {
   try { return !!fn(name); } catch (e) { console.warn('[preset-env] loadPreset 失败', name, e); return false; }
 }
 
-// 导出预设快照 JSON
 export function exportEnvPresetSnapshot(name: string): void {
   const detail = getEnvPresetDetail(name);
   if (!detail) { toastr?.error?.('读取预设失败（可能不存在或环境无 getPreset）'); return; }
@@ -111,7 +106,6 @@ type CustomApiFromPreset = {
   presence_penalty?: 'same_as_preset' | 'unset' | number; top_k?: 'same_as_preset' | 'unset' | number;
 };
 
-// 读 api-settings 活动预设内容（仿 api-settings：直接读 localStorage，避免跨模块状态）
 function readApiActivePreset(): { source: string; apiurl: string; key: string; model: string;
   temperature: 'same_as_preset' | 'unset' | number; max_tokens: 'same_as_preset' | 'unset' | number;
   top_p: 'same_as_preset' | 'unset' | number; frequency_penalty: 'same_as_preset' | 'unset' | number;
@@ -180,7 +174,6 @@ export type GenerateApiConfig = {
 export function resolveGenerateApiConfig(aiPresetNameOverride?: string, presetNameOverride?: string, onceOnlyOverride?: boolean): GenerateApiConfig {
   const cfg: GenerateApiConfig = {};
   const aiName = aiPresetNameOverride !== undefined ? aiPresetNameOverride : loadPresetEnv().aiPresetName;
-  // 优先取指定名预设，找不到则活动预设兜底
   const p = (aiName ? readApiPresetByName(aiName) : null) || readApiActivePreset();
   if (p && p.apiurl) {
     const c: CustomApiFromPreset = { source: p.source, apiurl: p.apiurl, model: p.model };

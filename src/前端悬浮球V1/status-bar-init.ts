@@ -13,6 +13,7 @@ import {
 import {
   __doc,
   __body,
+  __win,
   getAbortController,
   resetAbortController,
   __sigOpt,
@@ -45,7 +46,7 @@ import {
   pickExtraAttrColor,
   AVATAR_COLORS,
 } from './lib/config';
-import { applyPhoneDrag } from './lib/world/phone-shell';
+import { applyPhoneDrag, stopPhoneClock } from './lib/world/phone-shell';
 import {
   getManagedItems,
   setCurrentManagedItems,
@@ -81,12 +82,12 @@ import {
   showHoverTip,
   hideHoverTip,
   hideHoverTipNow,
-  hideMetricWheel,
   showItemsHoverTip,
   showSkillsHoverTip,
   openStatusDetail,
   openClothingDetailModal,
   destroyHoverTips,
+  hideMetricWheel,
 } from './modules/hover-tip';
 // 外观设置面板(8 项自定义 + data 属性重绑 + 持久化)
 import { initAppearance, openAppearanceSettings } from './modules/appearance-settings';
@@ -98,9 +99,10 @@ import './modules/links-init';
 import { openInitManager } from './modules/init-manager';
 import { openAiSummarize } from './modules/ai-summarize';
 import { openPromptSettings } from './modules/prompt-settings';
-import { openActivationMonitor, startActivationMonitor } from './modules/activation-monitor';
+import { openActivationMonitor, startActivationMonitor, stopActivationMonitor } from './modules/activation-monitor';
 // 世界套件：「世界」按钮 → 桌面壳。各 APP 模块通过副作用 import 自注册到 world-store 注册表。
-import { openWorldApp } from './modules/world/world-app';
+import { openWorldApp, disposeWorldAppBridge } from './modules/world/world-app';
+import { openWorldMapModal } from './modules/world/map-modal';
 // init-visual-editor 由 init-manager 看「可视化」按钮 onClick 调 openVisualEditor（静态 import，无需在此副作用挂载）
 // gsap 数值条数字 CountUp 入口动画（数字 0→目标值 0.8s 滚动 + 已有 width CSS transition 配合进度条平滑过渡）
 import { gsap } from 'gsap';
@@ -127,66 +129,50 @@ import {
 // 这一行必须在 status-bar-init 内部任何 innerHTML 赃值之前执行。
 // 关键：modal/状态栏 DOM 都挂到 parent document，用的是 parent 的 Element.prototype，
 // 所以必须在 parent 的原型上装拦截器（iframe 自己的原型管不到 parent 的元素）。
-(() => {
-  function installOnProto(proto: any) {
-    if (!proto || proto.__thFaStripped) return;
-    const desc = Object.getOwnPropertyDescriptor(proto, 'innerHTML');
-    if (!desc || !desc.set) return;
-    proto.__thFaStripped = true;
-    const originalSet = desc.set;
+let __faStripRestore: (() => void) | null = null;
+function installFaStrip(): void {
+  const restorers: Array<() => void> = [];
+  function installOnProto(proto: any, realmObject: ObjectConstructor) {
+    if (!proto || proto.__thFaOwner === window) return;
+    // 原描述符存放在 proto 自身（parent realm 内），iframe 被摘除也不失效。
+    // 新 realm 接管时靠它取回原生 setter；否则只能取到上一个已死 realm 的拦截器。
+    let orig = proto.__thFaOrig;
+    if (!orig) {
+      const desc = Object.getOwnPropertyDescriptor(proto, 'innerHTML');
+      if (!desc || !desc.set) return;
+      orig = realmObject.assign(realmObject.create(null), desc);
+      proto.__thFaOrig = orig;
+    }
+    const originalSet = orig.set as (this: Element, v: string) => void;
     Object.defineProperty(proto, 'innerHTML', {
       configurable: true,
-      enumerable: desc.enumerable,
-      get: desc.get,
+      enumerable: orig.enumerable,
+      get: orig.get,
       set(v: string) {
         originalSet.call(this, stripFa(v));
       },
     });
+    proto.__thFaOwner = window;
+    restorers.push(() => {
+      // 已被更新的 realm 接管时不还原，否则会掀掉对方的拦截器
+      if (proto.__thFaOwner !== window) return;
+      Object.defineProperty(proto, 'innerHTML', orig);
+      delete proto.__thFaOwner;
+      delete proto.__thFaOrig;
+    });
   }
   // 1. iframe 自己的原型（iframe 内元素）
-  installOnProto(Element.prototype);
+  installOnProto(Element.prototype, Object);
   // 2. parent 的原型（modal/状态栏 DOM 实际所在）— 必须装，否则 fa 图标不被替换
   try {
     const pw = window.parent as (Window & typeof globalThis) | null;
-    if (pw && pw !== window) installOnProto(pw.Element.prototype);
+    if (pw && pw !== window) installOnProto(pw.Element.prototype, pw.Object);
   } catch (e) { void e; }
-})();
-
-// 环境单例（__doc/__body/__abortController/__sigOpt/__sigOptCapture）
-// 已抽至 ./lib/dom-utils.ts
-
-// ================================================================
-// 酒馆助手 API 封装层（getRoot/getHelper/getMvu/hasVariableApi/
-// safeGetVariables/safeUpdateVariablesWith/safeTriggerSlash/
-// safeGetCharWorldbookNames/safeGetWorldbook/safeUpdateWorldbookWith/
-// waitForVariableApi/waitUntil）已抽至 ./lib/tavern-api.ts
-
-// ================================================================
-//  配置
-// ================================================================
-// 纯常量配置（ATTR_KEYS/ATTR_MAX/ATTR_CLS/NPC_METRICS/NPC_COUNTS/
-// NPC_ICON_CFG/AVATAR_COLORS/EXTRA_ATTR_COLORS/pickExtraAttrColor）已抽至 ./lib/config.ts
-
-// ================================================================
-//  地点/事件数据（localStorage 覆盖）
-// ================================================================
-// ManagedKind 类型已抽至 ./lib/config.ts
-// managed 数据层（类型 ManagedItemV2/ManagedEntryState/InspectorEntry +
-// 可变全局 managedEntryStates/currentManagedItems + migrate/load/save/get/set/
-// add/delete/toggleFavorite/copyManagedItem/getCurrentManagedItems）已抽至 ./lib/managed-store.ts
-
-// ==================== 储藏间自定义 kind 字典 ====================
-// STASH_KINDS_STORAGE_KEY / loadStashKinds / saveStashKinds / addStashKind /
-// deleteStashKind / getStashKindStorageKey 已抽至 ./lib/managed-store.ts
-
-// ==================== 标签字典 CRUD（数据层）====================
-// TAGS_STORAGE_KEY / GROUP_COLLAPSED_STORAGE_KEY / loadTags / saveTags / addTag /
-// deleteTag / renameTag / editTagMeta / setItemTags / addItemTag / removeItemTag /
-// loadBucketCollapsed / saveBucketCollapsed / getBucketCollapsed / setBucketCollapsed
-// （含类型 Tag / TagsByKind / CollapsedByKind / StashKindMeta）已抽至 ./lib/managed-store.ts
-
-// ==================== 标签颜色调色板 ====================
-// TAG_COLOR_PALETTE / TAG_PRESETS 已抽至 ./lib/config.ts
+  __faStripRestore = () => {
+    for (const r of restorers.splice(0)) { try { r(); } catch (e) { void e; } }
+  };
+}
+installFaStrip();
 
 // ================================================================
 //  状态
@@ -276,8 +262,6 @@ function applyRosterModeBtn() {
   btn.classList.toggle('active', rosterMode === 'card');
 }
 
-// DOM 查询/工具（_wrapperId/_wrapperEl/gw/qs/qsa/qsRoot/qsaRoot/setH/setT/clamp）
-// 已抽至 ./lib/dom-utils.ts
 export function attrPct(v:number) { return clamp(Math.round(v*100/ATTR_MAX),0,100); }
 
 const activeMessageOption: VariableOption = {type:'message', message_id:'latest'};
@@ -750,7 +734,7 @@ function render(data: Record<string,any>) {
   countUpNumericValues();
 }
 
-// 找所有数值类数字元素（.th-attr-val / .th-npc-metric-val / .th-wheel-val-cascade），gsap 从 0 滚到目标值
+// 找所有数值类数字元素（.th-attr-val / .th-npc-metric-val），gsap 从 0 滚到目标值
 const _countedElements = new WeakSet<HTMLElement>();
 function countUpNumericValues() {
   // 只对当前可见的数字做（按父元素可见性）
@@ -806,9 +790,7 @@ function renderWorldInfo(data:Record<string,any>) {
 // ================================================================
 function renderUserPanel(data:Record<string,any>) {
   const u=getUser(data); if(!u) return;
-  const uname=getUN(data);
   const ukey=getUserKey(data);
-  setH('.th-user-name-display', isEditMode?editableInput(uname,`${ukey}.名称`):esc(uname));
   const world=getWorld(data);
   const locHtml = isEditMode
     ? `${esc(world['当前所处区域名称']||'未知区域')} · ${editableInput(u['位置']||'未知地点',`${ukey}.位置`)}`
@@ -1047,41 +1029,18 @@ function renderNPCGrid(data:Record<string,any>) {
   bindNPCGridEvents(c);
 }
 
-// ==================== managed 数据/识别器/刷新/开关世界书条目 已抽至 modules/managed-modal.ts ====================
-
-// ==================== managed 总览/扫描/bind 主 modal 已抽至 modules/managed-modal.ts ====================
-
-// ==================== 桶折叠/卡片渲染/排序/搜索辅助 已抽至 modules/managed-modal.ts ====================
-
-// ==================== 标签管理 Modal ====================
-// currentSelectedTag / currentTagManagerKind 已移入 modules/tag-manager.ts（本模块私有）。
-// currentFilterTag 为主文件 whole-reassigned 状态，标签管理模块只读、储藏间模块只写，
-// 暴露 getter/setter 防 whole-reassigned 状态引用断开。
 export function getCurrentFilterTag(): string | null { return currentFilterTag; }
 export function setCurrentFilterTag(v: string | null): void { currentFilterTag = v; }
 
 // ==================== 标签筛选与桶分组 ====================
 let currentFilterTag: string | null = null; // null = 显示全部，'' = 未分类，'tagName' = 指定标签
 let currentlyCollapsed: Record<string, boolean> = {}; // 缓存当前展开/折叠状态，减少 localStorage 读写
-// currentlyCollapsed 为 whole-reassigned 状态，储藏间模块 openStashModal 初始化时整体重置，
-// 暴露 setter 防 whole-reassigned 状态引用断开。主文件折叠逻辑直接读写属性。
 export function setCurrentlyCollapsed(v: Record<string, boolean>): void { currentlyCollapsed = v; }
 export function getCurrentlyCollapsed(): Record<string, boolean> { return currentlyCollapsed; }
 
 // ==================== 排序 + 最近 ====================
-// SORT_PREFS_KEY / SortMode / currentSortMode / loadSortMode / saveSortMode / sortBucketEntries
-// 已抽至 modules/managed-modal.ts（仅其内部用）。
-// showRecentOnly/showFavOnly 为跨模块共享对象引用型全局，留主文件 export let。
 export let showRecentOnly: Record<ManagedKind, boolean> = {} as any; // "最近10张"模式开关
 export let showFavOnly: Record<ManagedKind, boolean> = {} as any; // "只看收藏"模式开关
-
-// loadSortMode / saveSortMode / sortBucketEntries / renderManagedBuckets / renderManagedCards
-// 已抽至 modules/managed-modal.ts。
-
-// 打开关联面板
-// ==================== managed 关联/编辑/配发 modal 已抽至 modules/managed-modal.ts ====================
-
-// 世界书识别器 modal + 条目编辑器已抽至 ./modules/wb-inspector.ts
 
 // 衣物列表弹窗
 export function openClothingListModal(npcName:string, clothing:Record<string,any>) {
@@ -1137,7 +1096,7 @@ function _modal2OverlayVisible(): boolean {
   const o = qs2('.th-modal-overlay-2'); return !!o && o.style.display !== 'none';
 }
 export function openModal2(t:string,b:string,opts?:{maxWidth?:string;revive?:()=>void;replace?:boolean;reset?:boolean;phone?:boolean}){
-  hideHoverTipNow(); hideMetricWheel();
+  hideHoverTipNow();
   const overlay=qs2('.th-modal-overlay-2'); if(!overlay) return;
   if (_modal2Restoring) {
     // revive 恢复路径：原地替换当前层，不动栈（保留祖父级）。
@@ -1445,8 +1404,11 @@ export function getDotCls(effectOrState:string):string{
 // ================================================================
 function bindEvents() {
   qs('.th-btn-refresh')?.addEventListener('click',()=>{manualRefresh();});
-  // 地点/事件总览按钮
-  qs('.th-btn-locations')?.addEventListener('click',()=>{openLocationsModal();});
+  // 地点总览 → 多层交互地图（D7：地图顶栏「列表视图」切回 openLocationsModal，功能一条不少）
+  qs('.th-btn-locations')?.addEventListener('click',()=>{
+    try { openWorldMapModal(); }
+    catch(e){ console.error('[此间天地] openWorldMapModal error:',e); openLocationsModal(); }
+  });
   qs('.th-btn-events')?.addEventListener('click',()=>{openEventsModal();});
   qs('.th-btn-dlcs')?.addEventListener('click',()=>{openDlcsModal();});
   qs('.th-btn-stash')?.addEventListener('click',()=>{ try { openStashModal(); } catch(e) { console.error('[此间天地] openStashModal error:', e); toastr?.error?.('储藏间打开失败'); } });
@@ -1687,8 +1649,9 @@ function bindEvents() {
     if (!btn || !panel) return;
     // 初始与 resize 时同步 topbar 底沿高度到 wrapper CSS 变量
     syncTopbarBottom();
-    window.addEventListener('resize', syncTopbarBottom);
-    window.addEventListener('th:topbar-resize', syncTopbarBottom as EventListener);
+    // resize 必须挂父页 window：状态栏 DOM 在父页，iframe 收不到父页视口缩放
+    __win.addEventListener('resize', syncTopbarBottom, __sigOpt());
+    window.addEventListener('th:topbar-resize', syncTopbarBottom as EventListener, __sigOpt());
     const setOpen = (open: boolean) => {
       if (open) {
         // 打开：先把 panel 挂回渲染态（display:flex）作为起点，下一帧再加 .shown 触发滑入动画
@@ -1710,14 +1673,14 @@ function bindEvents() {
     });
     // 抽屉关闭：× 按钮 + Esc
     qs('.th-review-panel-close')?.addEventListener('click', () => setOpen(false));
-    document.addEventListener('keydown', (e: KeyboardEvent) => {
+    __doc.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Escape' && panel.classList.contains('open')) {
         // 优先级：review-edit modal > review panel
-        if (document.querySelector('.th-review-edit-modal')) return;
+        if (__doc.querySelector('.th-review-edit-modal')) return;
         setOpen(false);
         e.stopPropagation();
       }
-    });
+    }, __sigOpt());
     // tab 切换
     qsa('.th-review-tab').forEach(t => {
       t.addEventListener('click', function(this: HTMLElement) {
@@ -1823,7 +1786,7 @@ function bindEvents() {
     if (!queue.length) {
       list.innerHTML = '';
       empty.style.display = '';
-      empty.textContent = '暂无待审核变量';
+      empty.textContent = '都批完啦，好乖';
       return;
     }
     // 按当前来源筛选过滤
@@ -1831,7 +1794,7 @@ function bindEvents() {
     if (!filtered.length) {
       list.innerHTML = '';
       empty.style.display = '';
-      empty.textContent = `「${reviewSourceLabel(reviewSourceFilter)}」无待审核变量`;
+      empty.textContent = `「${reviewSourceLabel(reviewSourceFilter)}」都批完啦，好乖`;
       return;
     }
     empty.style.display = 'none';
@@ -1848,7 +1811,7 @@ function bindEvents() {
       }
       const npc = parseNpcFromPath(item.path);
       const jumpBtn = npc ? `<button class="th-review-item-btn th-btn-jump-npc" data-action="jump-npc" data-npc="${esc(npc)}" title="查看 ${esc(npc)} 详情">👤</button>` : '';
-      return `<div class="th-review-item status-${item.status}" data-id="${item.id}"><span class="th-review-item-path" title="${path}">${path}</span>${diffHtml}<div class="th-review-item-old" title="原值: ${oldV}">${oldV}</div><span class="th-review-item-arrow">→</span><div class="th-review-item-new" title="新值: ${newV}">${newV}</div><div class="th-review-item-actions">${jumpBtn}<button class="th-review-item-btn th-btn-approve" data-action="approve" title="同意">✓</button><button class="th-review-item-btn th-btn-reject" data-action="reject" title="拒绝">✗</button><button class="th-review-item-btn th-btn-edit" data-action="edit" title="修改新值">✎</button></div></div>`;
+      return `<div class="th-review-item status-${item.status}" data-id="${item.id}"><span class="th-review-item-path" title="${path}">${path}</span>${diffHtml}<div class="th-review-item-old" title="原值: ${oldV}">${oldV}</div><span class="th-review-item-arrow">→</span><div class="th-review-item-new" title="新值: ${newV}">${newV}</div><div class="th-review-item-actions">${jumpBtn}<button class="th-review-item-btn th-btn-approve" data-action="approve" title="同意"><svg class="th-rr-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></button><button class="th-review-item-btn th-btn-reject" data-action="reject" title="拒绝"><svg class="th-rr-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 6.5l-11 11M6.5 6.5l11 11"/></svg></button><button class="th-review-item-btn th-btn-edit" data-action="edit" title="修改新值"><svg class="th-rr-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div></div>`;
     }).join('');
   }
   // 渲染来源筛选条 — 全部/世界信息/主角/各NPC(动态)/其他
@@ -1891,11 +1854,11 @@ function bindEvents() {
     if (!snaps.length) {
       list.innerHTML = '';
       empty.style.display = '';
-      empty.textContent = '暂无快照';
+      empty.textContent = '还没封存时光呢';
       return;
     }
     empty.style.display = 'none';
-    empty.textContent = '暂无待审核变量';
+    empty.textContent = '都批完啦，好乖';
     list.innerHTML = snaps.slice().reverse().map(s => {
       const time = new Date(s.timestamp).toLocaleString('zh-CN', { hour12: false });
       return `<div class="th-snapshot-item" data-id="${s.id}"><div class="th-snapshot-item-info"><span class="th-snapshot-item-time">${time}</span><span class="th-snapshot-item-floor">#${s.messageId}</span></div><div class="th-snapshot-item-actions"><button class="th-snapshot-item-btn th-snapshot-btn-restore" data-snap-action="restore" type="button">覆盖</button><button class="th-snapshot-item-btn th-snapshot-btn-delete" data-snap-action="delete" type="button">删除</button></div></div>`;
@@ -1999,6 +1962,7 @@ function bindEvents() {
   qs('.th-avatar-upload')?.addEventListener('click',()=>{const u=avatarImages['user']||'';if(u)showImage(u);else{uploadingTarget='user';qs<HTMLInputElement>('.th-avatar-file-input')?.click();}});
   qs('.th-avatar-btn-upload')?.addEventListener('click',(e:Event)=>{e.stopPropagation();uploadingTarget='user';qs<HTMLInputElement>('.th-avatar-file-input')?.click();});
   qs('.th-avatar-btn-delete')?.addEventListener('click',(e:Event)=>{e.stopPropagation();deleteAvatar('user');});
+  qs('.th-avatar-btn-gallery')?.addEventListener('click',(e:Event)=>{e.stopPropagation();openGalleryModal('user',getUN(currentData||{}));});
 
   // 文件上传（支持头像和画廊）
   const fi=qs<HTMLInputElement>('.th-avatar-file-input');
@@ -2010,7 +1974,7 @@ function bindEvents() {
       let loaded=0;
       Array.from(this.files).forEach(file=>{
         const r=new FileReader();
-        r.onload=()=>{ addNPCGalleryImage(galleryTarget,r.result as string); loaded++; if(loaded===this.files!.length){ closeModal(); openGalleryModal(galleryTarget); (window as any).__galleryTarget__=''; } };
+        r.onload=()=>{ addNPCGalleryImage(galleryTarget,r.result as string); loaded++; if(loaded===this.files!.length){ const gd=(window as any).__galleryDisplay__||''; closeModal(); openGalleryModal(galleryTarget,gd||undefined); (window as any).__galleryTarget__=''; (window as any).__galleryDisplay__=''; } };
         r.readAsDataURL(file);
       });
     } else {
@@ -2429,6 +2393,19 @@ export async function setupStatusBar(): Promise<{ destroy: () => void }> {
       try { destroyHoverTips(); } catch(e){ void e; }
       // 回收 portal 到父页 body 的世界壳/二级 modal overlay（按 _wrapperId 归属，避免多次挂载堆叠）
       try { removePortaledModal2(); } catch(e){ void e; }
+      try { stopActivationMonitor(); } catch(e){ void e; }
+      try { stopPhoneClock(); } catch(e){ void e; }
+      // 父页上的桥与原型拦截器必须撤掉：留着会让父页持有整个 iframe 模块图
+      try { delete (getRoot() as any).__thStatusBarData; } catch(e){ void e; }
+      try { disposeWorldAppBridge(); } catch(e){ void e; }
+      try {
+        const pw = (() => { try { return window.parent as any; } catch(e){ void e; return null; } })();
+        for (const w of [window as any, pw]) {
+          if (!w) continue;
+          try { delete w.__deleteAvatar__; delete w.__uploadTarget__; delete w.__galleryTarget__; delete w.__galleryDisplay__; } catch(e){ void e; }
+        }
+      } catch(e){ void e; }
+      try { __faStripRestore?.(); } catch(e){ void e; }
     },
   };
 }

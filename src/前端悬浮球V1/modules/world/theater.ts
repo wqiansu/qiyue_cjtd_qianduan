@@ -1,8 +1,3 @@
-// 世界套件·小剧场（theater）— 三栏重构 SPA（.thw-thr-app2）
-// 定位：正史之外的「虚构小品工厂」——画外音/画外剧场/平行世界/if 线/涩涩番外，默认隔离正文、放飞玩梗。
-//   40+ 套剧种预设，点分类即开演，零配置；导演/沉浸双推进；只用现有角色（不做原创角色库）。
-// 架构同 weibo：openModal2 只调一次（reset+revive），常驻根容器 + _view 状态机；重渲染改根 innerHTML，
-//   事件委托绑根；子面板=底部 sheet，不堆叠 modal。三栏用共享 .thw-app 设计系统（sidebar/content）。
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { getRoot } from '../../lib/tavern-api';
 import { openModal2 } from '../../status-bar-init';

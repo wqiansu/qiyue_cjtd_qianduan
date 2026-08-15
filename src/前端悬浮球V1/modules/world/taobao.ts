@@ -1,9 +1,3 @@
-// 淘宝（taobao）模块 —— PC 端网购平台。
-// 顶部搜索栏 + 左分区导航 + 中商品瀑布流/详情 + 右购物车/检视。
-//   分区：首页(猜你喜欢) / 服装(可绑风格指南) / 日用百货 / 成人情趣(吃色情度+肉欲度) / 特产(读世界书) /
-//        购物车 / 订单物流 / 钱包流水 / 直播带货。
-//   AI 生成商品/店铺/评价(买家秀)/物流播报/直播；独立余额钱包；下单→物流→通知联动；
-//   差评+客服+退货闭环；分类提示词可绑复数世界书条目。图片走中文画面描述+英文 tag。
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { openModal2 } from '../../status-bar-init';
 import { phoneShellHtml, startPhoneClock, pickImageFile } from '../../lib/world/phone-shell';
@@ -323,6 +317,7 @@ let _promptEditId: string | null = null;
 let _catManageSection: string | null = null;   // 分类管理面板当前分区
 let _serviceShopId: string | null = null;       // 客服对话目标店铺
 let _serviceLog: { who: 'me' | 'cs'; text: string }[] = [];
+let _tbDebounce: ReturnType<typeof setTimeout> | null = null;
 
 // __TB_HELPERS__
 function worldInfoBlock(): string {
@@ -726,9 +721,10 @@ function catManagerHtml(): string {
   const section = _catManageSection || 'clothing';
   const secTabs = TB_SECTIONS.filter(s => s.id !== 'home').map(s =>
     `<button class="thw-tb-catseg${section === s.id ? ' on' : ''}" data-tb-catseg="${s.id}" type="button">${iconHtml(s.icon)} ${esc(s.name)}</button>`).join('');
-  const cps = getTbSettings().catPrompts || {};
+  const s0 = getTbSettings();
+  const cps = s0.catPrompts || {};
   const builtin = TB_CATEGORIES[section] || [];
-  const custom = getTbSettings().customCats.filter(c => c.section === section);
+  const custom = s0.customCats.filter(c => c.section === section);
   const builtinRows = builtin.map(c => `
     <div class="thw-tb-catrow" data-catwrap="${escAttr(c.name)}">
       <div class="thw-tb-catname">${iconHtml(c.icon)} ${esc(c.name)}<span class="thw-tag">内置</span></div>
@@ -1256,7 +1252,8 @@ function bindRoot(): void {
     if (t.classList.contains('thw-tb-cfg-balance')) { updateTbSettings({ balance: Math.max(0, num(t)) }); return; }
     if (t.classList.contains('thw-tb-cfg-auto-on')) {
       const on = (t as HTMLInputElement).checked;
-      updateTbSettings({ autoInterval: on ? (getTbSettings().autoInterval > 0 ? getTbSettings().autoInterval : 20) : 0 }); render(); return;
+      const prevInterval = getTbSettings().autoInterval;
+      updateTbSettings({ autoInterval: on ? (prevInterval > 0 ? prevInterval : 20) : 0 }); render(); return;
     }
     if (t.classList.contains('thw-tb-cfg-auto')) { updateTbSettings({ autoInterval: Math.max(1, Math.min(200, num(t))) }); return; }
     if (t.classList.contains('thw-tb-cfg-pricepref')) { updateTbSettings({ pricePref: (t as HTMLInputElement).value }); return; }
@@ -1266,9 +1263,17 @@ function bindRoot(): void {
       'thw-tb-eco-consume': 'ecoConsume', 'thw-tb-eco-aesthetic': 'ecoAesthetic', 'thw-tb-eco-curio': 'ecoCurio',
       'thw-tb-eco-erotic': 'ecoErotic', 'thw-tb-eco-carnal': 'ecoCarnal',
     };
-    for (const k in ecoMap) if (t.classList.contains(k)) { updateTbSettings({ [ecoMap[k]]: Math.max(0, Math.min(200, num(t))) } as any); return; }
+    for (const k in ecoMap) if (t.classList.contains(k)) {
+      if (_tbDebounce) clearTimeout(_tbDebounce);
+      _tbDebounce = setTimeout(() => updateTbSettings({ [ecoMap[k]]: Math.max(0, Math.min(200, num(t))) } as any), 220);
+      return;
+    }
     // 分类提示词 textarea
-    if (t.classList.contains('thw-tb-catprompt')) { const name = t.getAttribute('data-cat-name') || ''; if (name) setCatPrompt(name, (t as HTMLTextAreaElement).value); return; }
+    if (t.classList.contains('thw-tb-catprompt')) {
+      const name = t.getAttribute('data-cat-name') || ''; const val = (t as HTMLTextAreaElement).value;
+      if (name) { if (_tbDebounce) clearTimeout(_tbDebounce); _tbDebounce = setTimeout(() => setCatPrompt(name, val), 220); }
+      return;
+    }
     // 订单编辑——状态/地址/物流文字
     const oeStatus = t.closest('[data-tb-oe-status]') as HTMLSelectElement | null;
     if (oeStatus) { editOrderStatus(oeStatus.getAttribute('data-tb-oe-status') || '', oeStatus.value as TbOrder['status']); render(); return; }

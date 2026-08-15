@@ -32,9 +32,9 @@ npx tsc --noEmit -p tsconfig.json   # 类型检查（0 容忍）
 pnpm check:cdn     # 校验 prod 产物里的 CDN 具名导入在 CDN 上真实存在（build 之后跑）
 ```
 
-- **交付产物一律 `pnpm build`（production）**。历史上曾有过「本项目必须 build:dev、prod 导入酒馆不显示」的规定，那是误判，真因是两个不存在的 lucide 具名导入，已于 2026-07-28 修掉；详见下「踩坑档案」。
-- **两种 mode 对「导入名写错」的容错完全不同，这是 prod 唯一需要提防的地方**：prod 开 `usedExports` → 逐名导入 `import{A as t,…}` → 浏览器在**模块解析期**校验具名 export，缺一个直接 SyntaxError，**整个模块一行都不执行**；dev 出命名空间导入 `import * as NS`，缺名只是 `undefined`，运行时防御能兜住。所以「缺个图标只掉一个图标」只在 dev 成立，**改 CDN 外部依赖的导入名后必须跑一次 `pnpm build` 并实测导入**。
-- **`build:dev` / `build` 都走 transpileOnly，不报「漏 export」类错误**；抽取模块 / 改 export 后**必须**另跑 `tsc --noEmit` 查 TS2305/TS2306（详见下「踩坑档案」）。
+- **交付产物一律 `pnpm build`（production）**，与上游教程和 CI 一致。
+- **两种 mode 对「导入名写错」的容错完全不同，这是 prod 唯一需要提防的地方**：prod 开 `usedExports` → 逐名导入 `import{A as t,…}` → 浏览器在**模块解析期**校验具名 export，缺一个直接 SyntaxError，**整个模块一行都不执行**；dev 出命名空间导入 `import * as NS`，缺名只是 `undefined`，运行时防御能兜住。所以「缺个图标只掉一个图标」只在 dev 成立，**改 CDN 外部依赖的导入名后必须跑一次 `pnpm build` + `pnpm check:cdn` 并实测导入**。
+- **两种 mode 都走 transpileOnly，不报「漏 export」类错误**；抽取模块 / 改 export 后**必须**另跑 `tsc --noEmit` 查 TS2305/TS2306。
 - 产物是单个 `dist/前端悬浮球V1/index.js`（prod ~4.8MB；dev ~24MB 未压缩）。**AI 无法代为导入酒馆**，UI 行为改动需用户手动导入产物实测。
 - 远程导入（需先 `git push` 触发 CI 重打包，仓库 `wqiansu/qiyue_cjtd_qianduan`）：
   ```js
@@ -174,19 +174,14 @@ src/前端悬浮球V1/
 
 - **依赖突然报错先查 CDN**：代码没动却报错，先怀疑外部化到无锁 CDN 的依赖版本变了（pinia 的裸 `__VUE_PROD_DEVTOOLS__` 事故）。非你的产物。
 - **状态栏读不到变量 → 是 `getUK` 选错主角键**：MVU 在 message 作用域常写空壳 `{{user}}`（属性全 0）。`getUK` 按真实数据量打分选主角，不是「取第一个非占位符键」。变量类 bug **先 MCP 实测 `stat_data` 形状再下结论，别读代码猜**（历史误判多次）。
-- **app 绑定世界书「不生效」错判三次**：真因不是注入时序，是①每 app 曾有默认关的独立总闸 `useWorldbook`（现已改 key 驱动：勾了条目就注入）②builder 没接到每一条生成路径。**断言注入生效前，确认它真的接到了「每一条」`chatGenerate` 调用点**，别只看机制对不对。现方案是 `registerAppWbKeys` + `chatGenerate` 集中无条件注入。
+- **app 绑定世界书「不生效」不是注入时序问题**：真因是 builder 没接到每一条生成路径（另有一个默认关的独立总闸 `useWorldbook`，现已废除，改 key 驱动：勾了条目就注入）。**断言注入生效前，确认它真的接到了「每一条」`chatGenerate` 调用点**，别只看机制对不对。现方案是 `registerAppWbKeys` + `chatGenerate` 集中无条件注入。
 - **死开关成片**：世界套件历史遗留大量「UI 有开关、store 也存、但生成路径从不读」的死配置（误导玩家+开发）。断言某开关生效前，grep 它的 `data-*` / store key，确认**写入点↔消费点都连通**。死配置要么接线、要么删，别留着误导。
 - **注入片段默认去向是 floor（写输入框）不是 worldbook**：「同步世界书写 0 条但预览有内容」不是坏了——是勾了片段没改去向，停在 floor。先确认去向 mode。
 - **变量审核只记叶子**：`variable-review.ts` 的 `walk()` 任一侧是容器就下钻，只有两侧都是基元才记一条 diff（否则容器整块被当一条 diff、双计数）。
 - **不赌酒馆宏替换**：状态栏未完全挂载酒馆，`generateRaw` 是否对 `ordered_prompts` 做 substituteParams 无文档。破限/system 里的 `{{user}}`/`{{random::}}` 一律用自研 `expandLocalMacros` 发送前本地展开。
-- **prod 打包整体不显示 = CDN 外部依赖的具名导入写错了（不是 mode 本身的问题）**：2026-07-28 用 `pnpm build`（production）出的产物导入酒馆后界面完全不显示，控制台报
-  `SyntaxError: The requested module '…/lucide-static/+esm' does not provide an export named 'CircleHalf'`。
-  真因是 `lib/icons.ts` 里 `CircleHalf`、`Stream` 这两个名字在 lucide-static 中**根本不存在**（已分别改用 `Contrast`、`Waves` 修掉，257 个导入名逐一对过 CDN 的 2003 个 export，只有这两个是假的）。
-  - **机制**：prod 开 `usedExports` → webpack 出逐名导入 `import{AlignLeft as t,Apple as e,…}` → 浏览器在**模块解析期**校验每个具名 export，缺一个直接 SyntaxError，**整个模块一行都不执行**（所以是整体消失，不是掉一个图标）。dev 出的是命名空间导入 `import * as NS`，缺名只是 `undefined`，`inner()` 那类运行时防御才有机会兜住。
-  - **教训**：这是个潜伏 bug —— 因为交付一直用 dev，两个假名字长期被吞掉没人发现，一换 prod 就炸。**不要把「dev 能跑」当成导入名正确的证据**；改完 CDN 外部依赖的导入名，必须跑一次 `pnpm build` 实测导入。
-  - ✅ **已加自动防线**：[`scripts/check_cdn_imports.mjs`](../../scripts/check_cdn_imports.mjs)（`pnpm check:cdn`）从 prod 产物里正则抓出所有 `import{…}from'https://…'` 的具名导入，fetch 各 CDN 的 `+esm` 解析其 `export{…}` 子句逐一比对，缺名就报错退出 1。当前状态：4 个依赖 263 个导入名全部存在（lucide-static 256、@floating-ui/dom 5、jsonrepair 1、gsap 1）。**`pnpm build` 之后跑一次**，别再靠肉眼。（注：Node 默认 ESM loader 不能 `import 'https://…'`，所以脚本走 fetch + 解析，不是 dynamic import。）
-  - ⚠️ **不要再写「本项目必须 build:dev / prod 不可用」**：那条规则是这次误判的产物（当时还错误推测成 terser `mangle`），已作废。修完后 prod 产物用户实测导入成功。上游教程与 CI 都用 `pnpm build`，本项目现已回归一致。
-  - 顺带记录 mode 差异（`webpack.config.ts` minimizer 分支）：prod = terser 压缩 + `mangle`（仅保留 `_`/`toastr`/`YAML`/`$`/`z`）+ `devtool:'source-map'`（额外产出 `.map` 文件）；dev = `beautify` + `compress:false` + `mangle:false` + `eval-source-map`（内联，不出 `.map`）。
+- **prod 打包整体不显示 = CDN 外部依赖的具名导入写错了（不是 mode 本身的问题）**：报 `SyntaxError: … does not provide an export named 'X'` 时，`X` 在那个包里根本不存在。prod 开 `usedExports` → 逐名导入 → 浏览器在**模块解析期**校验每个具名 export，缺一个直接 SyntaxError，**整个模块一行都不执行**（所以是整体消失，不是掉一个图标）；dev 的命名空间导入让缺名只是 `undefined`，被运行时防御吞掉。**别把「dev 能跑」当成导入名正确的证据**——假名字能潜伏很久，一换 prod 就炸。
+  - **自动防线**：[`scripts/check_cdn_imports.mjs`](../../scripts/check_cdn_imports.mjs)（`pnpm check:cdn`）从 prod 产物正则抓出所有 `import{…}from'https://…'`，fetch 各 CDN 的 `+esm` 解析其 `export{…}` 逐一比对，缺名报错退出 1。基线：4 个依赖 263 个导入名全部存在（lucide-static 256、@floating-ui/dom 5、jsonrepair 1、gsap 1）。**`pnpm build` 之后跑一次**，别靠肉眼。（Node 默认 ESM loader 不能 `import 'https://…'`，故走 fetch + 解析。）
+  - mode 差异（`webpack.config.ts` minimizer 分支）：prod = terser 压缩 + `mangle`（仅保留 `_`/`toastr`/`YAML`/`$`/`z`）+ `devtool:'source-map'`（额外产出 `.map`）；dev = `beautify` + `compress:false` + `mangle:false` + `eval-source-map`（内联，不出 `.map`）。
 - **CI 会把仓库里的 dist 重打包覆盖掉**：[bundle.yaml](../../.github/workflows/bundle.yaml) 在 push 到 `main` 且改动不只 dist（`paths-ignore: dist/**`）时触发，先 `rm -rf dist` 再 `pnpm install && pnpm build`，然后 `[bot] bundle` 提交回仓库。所以**仓库/jsdelivr 上的 dist 恒为 CI 的 prod 产物**，本地提交的那份 push 后保不住（本地文件不受影响）。本地也用 prod 后两边一致，不再有差异。
 - **抽取模块后必跑 `tsc --noEmit`**：两种 mode 都走 transpileOnly，漏 `export` 不报错（运行时变 `undefined` 崩溃）。tsc 现在 0 容忍。
 - **「丰富化所有提示词」先只读审计**：本项目绝大多数提示词已是 gold standard，盲改会劣化。很多看似 THIN 的「无契约」其实是按设计的注入片段（一行壳，体在代码里拼）。派子代理审计定位真 THIN 再精准补。
@@ -194,9 +189,10 @@ src/前端悬浮球V1/
 ## 接手一个新会话时
 
 1. 读 [PROGRESS.md](PROGRESS.md)（单一可信源，尤其 §4 硬约束 + §6 长期要求）。
+   - **若这轮涉及地图功能**，直接读 `src/前端悬浮球V1/lib/world/map-*.ts` 与 `modules/world/map-modal.ts`（地图唯一的正文注释在代码里，无独立设计文档）。
 2. 读 `@types/function/{generate,inject,worldbook,variables,chat_message}.d.ts` + `@types/iframe/exported.mvu.d.ts`；用某接口前先 grep 它的签名，别凭记忆。
 3. `ls src/前端悬浮球V1/{lib,modules}/{,world/}` 确认结构。
 4. 改完 `npx tsc --noEmit`（0 容忍）+ `pnpm build`（production，交付产物）；UI 行为让用户导入 `dist/前端悬浮球V1/index.js` 实测；回滚走 git。
 5. 上面的「踩坑档案」是历史高成本 bug 的浓缩，改到相关处先看对应条。
 
-> 本文档已收纳前端相关的全部长期约定与踩坑（原先散在 auto-memory 里）。`预设工作室/` 下的生图 SD 提示词预设是**另一条工作线**（anima 规范、通配符库、DS 双 COT 等），与本前端无关，不在此文档范围。
+> `预设工作室/` 下的生图 SD 提示词预设是**另一条工作线**，与本前端无关，不在此文档范围。

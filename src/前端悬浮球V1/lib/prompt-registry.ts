@@ -1,11 +1,5 @@
-// 提示词注册中心（registry）
-// 统一管理所有提示词来源，供「提示词编辑」设置面板与 AI 总结面板共用：
-//   - 内置 6 套：来自 config.AI_SUMMARY_PROMPTS（builtin=true），可编辑（编辑结果存 override，不改源码）。
-//   - 自定义：来自 ai-summary-store 的 _th_ai_prompts_v1（builtin=false），可改可删。
-//   - override 机制：内置提示词编辑后，把新 template 存到独立 key _th_ai_builtin_overrides_v1
-//     的 { [id]: template } 槽；getPrompt(id) 优先返回 override；resetBuiltin(id) 清该 id override。
-//   - 接口预留：未来 NPC/角色档案/续写润色等提示词可调 registerExtra() 挂入，设置面板自动渲染。
-// 向下兼容：不动 _th_ai_prompts_v1 结构（仍是自定义数组），不破坏 getCustomPrompts/saveCustomPrompt/deleteCustomPrompt。
+// 提示词注册中心（registry）：统一管理内置/自定义/额外提示词，供「提示词编辑」与 AI 总结面板共用。
+// 内置提示词编辑后存 override（_th_ai_builtin_overrides_v1），不改源码；自定义存 _th_ai_prompts_v1。
 import { AI_SUMMARY_PROMPTS, INIT_LS_KEYS, type AiSummaryPrompt, type AiSummaryPromptKind, type AiPromptConstraints } from './config';
 import { getCustomPrompts, saveCustomPrompt, deleteCustomPrompt } from './ai-summary-store';
 
@@ -15,15 +9,14 @@ export type PromptEntry = {
   label: string;
   template: string;
   builtin: boolean;     // 是否内置（内置不可删，但可编辑=存 override）
-  editable: boolean;    // 是否可编辑（目前全部可编辑）
+  editable: boolean;
   overridden?: boolean; // 内置且已被 override（设置面板显示「可恢复」）
   constraints?: AiPromptConstraints; // 提取约束（字数/条目数/总分上限）
 };
 
-const LS_OVERRIDES = INIT_LS_KEYS.aiBuiltinOverrides; // '_th_ai_builtin_overrides_v1'
+const LS_OVERRIDES = INIT_LS_KEYS.aiBuiltinOverrides;
 
 // ==================== 内置 override 持久化 ====================
-// override 结构为对象 { template, constraints? }。
 // 向下兼容：读到旧的纯字符串时，按 { template: <string> } 解释。
 type OverrideVal = { template: string; constraints?: AiPromptConstraints };
 type OverrideMap = Record<string, string | OverrideVal>;
@@ -39,7 +32,6 @@ function readOverrides(): OverrideMap {
 function writeOverrides(m: OverrideMap): void {
   try { localStorage.setItem(LS_OVERRIDES, JSON.stringify(m)); } catch (e) { console.warn('[prompt-registry] 写内置 override 失败', e); }
 }
-// 归一化一条 override 值为 { template, constraints? }（兼容旧纯字符串）。
 function normOverride(v: string | OverrideVal | undefined): OverrideVal | undefined {
   if (v == null) return undefined;
   if (typeof v === 'string') return { template: v };
@@ -71,7 +63,6 @@ function customToEntry(p: AiSummaryPrompt): PromptEntry {
   return { id: p.id, kind: p.kind, label: p.label, template: p.template, builtin: false, editable: true, constraints: p.constraints };
 }
 
-// 全部提示词（内置[含 override] + 额外 + 自定义），顺序：内置 → 额外 → 自定义。
 export function getAllPrompts(): PromptEntry[] {
   const overrides = readOverrides();
   const builtins = AI_SUMMARY_PROMPTS.map(p => builtinToEntry(p, overrides));
@@ -83,7 +74,6 @@ export function getAllPrompts(): PromptEntry[] {
   return [...builtins, ...extras, ...customs];
 }
 
-// 取单条（内置优先返回 override）。找不到返回 undefined。
 export function getPrompt(id: string): PromptEntry | undefined {
   return getAllPrompts().find(p => p.id === id);
 }
@@ -95,9 +85,6 @@ export function getAllAsSummaryPrompts(): AiSummaryPrompt[] {
 
 // ==================== 写入 ====================
 
-// 保存一条提示词：
-//  - 内置（id 以 builtin- 开头或 builtin=true）：把 template 存为 override（不改 label/kind，内置 label/kind 固定）。
-//  - 自定义：走 saveCustomPrompt（id 为空则调用方应先生成）。
 export function savePrompt(e: { id: string; kind: AiSummaryPromptKind; label: string; template: string; builtin: boolean; constraints?: AiPromptConstraints }): void {
   if (e.builtin) {
     const m = readOverrides();

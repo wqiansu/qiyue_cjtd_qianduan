@@ -1,34 +1,28 @@
-// 世界套件 · 通话数据层（call-store.ts）
-// 模拟电话：通话记录列表 + 单次通话的逐句文字对话（无 TTS，纯文字剧情形态）。
-// 每个角色一条「通话会话」，复用记忆引擎（sessionReply）保持连贯。数据纯本地 _th_world_call_v1。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
-// 一句对话
 export type CallLine = {
   id: string;
-  who: 'me' | 'peer';      // 我 / 对方
+  who: 'me' | 'peer';
   text: string;
   ts: number;
 };
 
-// 通话记录（每个角色一条，含历史对话）
 export type CallRecord = {
   id: string;
-  contactId?: string;      // 关联联系人
-  peerName: string;        // 对方昵称
-  lastTs: number;          // 最近通话时间
-  duration?: number;       // 最近通话时长（秒，展示用）
-  missed?: boolean;        // 未接（角色主动来电未接听）
-  lines: CallLine[];       // 历史对话（跨多次通话累积）
+  contactId?: string;
+  peerName: string;
+  lastTs: number;
+  duration?: number;
+  missed?: boolean;
+  lines: CallLine[];
 };
 
-// 通话设置。
 export type CallSettings = {
-  useFloors: boolean;          // 通话生成时参考最近正文
-  floorCount: number;          // 参考正文读几楼
+  useFloors: boolean;
+  floorCount: number;
   maxBubbles: number;          // 对方一次最多说几句
-  memoryEnabled: boolean;      // 是否启用通话会话记忆
-  worldbookEntryKeys: string[];// 绑定世界书条目（作为设定来源并入生成）
+  memoryEnabled: boolean;
+  worldbookEntryKeys: string[];
 };
 const CALL_SET_DEFAULT: CallSettings = {
   useFloors: false, floorCount: 6, maxBubbles: 4, memoryEnabled: true, worldbookEntryKeys: [],
@@ -61,7 +55,6 @@ export function getRecordByContact(contactId: string): CallRecord | undefined {
   return read().records.find(r => r.contactId === contactId);
 }
 
-// 确保某角色有一条通话记录（没有则建），返回记录 id。
 export function ensureRecord(p: { contactId?: string; peerName: string }): CallRecord {
   const d = read();
   let r = p.contactId ? d.records.find(x => x.contactId === p.contactId) : d.records.find(x => x.peerName === p.peerName);
@@ -85,7 +78,6 @@ export function addLine(recordId: string, who: 'me' | 'peer', text: string): Cal
   return line;
 }
 
-// 标记一次通话结束（记时长，用于通话记录展示）
 export function markCallEnd(recordId: string, duration: number): void {
   const d = read();
   const r = d.records.find(x => x.id === recordId);

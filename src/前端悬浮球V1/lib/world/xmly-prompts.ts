@@ -1,7 +1,4 @@
-// 世界套件 —— 喜马拉雅（xmly）AI 提示词（xmly-prompts.ts）
-// 导演笔记式、高信息密度、全女性百合生态、设定读绑定世界书。仙宫版听书电台：**纯音频**。
-// 所有提示词共用 XM_RULE（生态铁律）；破限置顶；生态浓度/世界信息由调用方填充。
-// 最核心铁律：**声音是唯一媒介**——一切生成聚焦「听感」（音色/语气/配乐/音效/剧情梗概），不写视觉画面。
+// 所有提示词共用 XM_RULE（生态铁律）；破限置顶。最核心铁律：声音是唯一媒介——只写听感，不写视觉画面。
 import { registerPromptTemplate } from './world-prompts';
 import { buildJailbreak } from './prompt-kit';
 

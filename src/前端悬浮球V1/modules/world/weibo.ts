@@ -1,7 +1,4 @@
 // 世界套件 P2 · 微博（weibo）— 单 modal SPA
-// 世界观内的微博：角色当博主发动态，玩家浏览/点赞/评论/转发；AI 生成动态、评论、热搜。
-// 架构同微信/论坛：openModal2 仅调一次（reset+revive），常驻根容器 + _view 状态机，
-//   事件委托绑根容器；子面板=app 内底部 sheet，不堆叠 modal。
 import { esc, qs } from '../../lib/dom-utils';
 import { getRoot } from '../../lib/tavern-api';
 import { openModal2 } from '../../status-bar-init';

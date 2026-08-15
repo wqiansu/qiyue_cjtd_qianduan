@@ -501,13 +501,13 @@ export function openNPCDetail(npcName:string) {
 
   // 内心想法
   if(info['内心想法']){
-    h+=`<div class="th-modal-section"><div class="th-modal-label"><i class="fa-solid fa-comment"></i> 内心想法</div>`;
+    h+=`<div class="th-modal-section th-mind-note"><div class="th-modal-label"><i class="fa-solid fa-heart"></i> 内心想法</div>`;
     h+=getStatusEditMode() ? editableTextarea(info['内心想法'],basePath+'.内心想法') : `<div class="th-modal-text">${esc(info['内心想法'])}</div>`;
     h+=`</div>`;
   }
   // 本能渴望
   if(info['当前本能渴望']&&info['当前本能渴望']!=='无'){
-    h+=`<div class="th-modal-section"><div class="th-modal-label"><i class="fa-solid fa-crosshairs"></i> 本能渴望</div>`;
+    h+=`<div class="th-modal-section th-mind-note"><div class="th-modal-label"><i class="fa-solid fa-star"></i> 本能渴望</div>`;
     h+=getStatusEditMode() ? editableTextarea(info['当前本能渴望'],basePath+'.当前本能渴望') : `<div class="th-modal-text">${esc(info['当前本能渴望'])}</div>`;
     h+=`</div>`;
   }
@@ -793,17 +793,18 @@ export function openAttrModal(name:string,attrs:Record<string,any>, editPath?:st
 // ================================================================
 //  画廊弹窗
 // ================================================================
-export function openGalleryModal(npcName:string) {
+export function openGalleryModal(npcName:string, displayName?:string) {
+  const shown=displayName||npcName;
   const images=getNPCGallery(npcName);
   let h=`<div class="th-gallery-grid">`;
-  if(!images.length) h+=`<div class="th-empty" style="grid-column:1/-1"><i class="fa-solid fa-images"></i> 暂无图片,点击 + 添加</div>`;
+  if(!images.length) h+=`<div class="th-empty" style="grid-column:1/-1"><i class="fa-solid fa-images"></i> 画卷尚未上色，点 + 上色</div>`;
   images.forEach((url,idx)=>{
-    h+=`<div class="th-gallery-item" data-gidx="${idx}"><img src="${escAttr(url)}" alt="画廊图片${idx+1}" data-gfull="${escAttr(url)}"><button class="th-gallery-delete" data-gdel="${idx}" data-gnpc="${escAttr(npcName)}"><i class="fa-solid fa-xmark"></i></button></div>`;
+    h+=`<div class="th-gallery-item" data-gidx="${idx}"><img src="${escAttr(url)}" alt="画廊图片${idx+1}" data-gfull="${escAttr(url)}"><button class="th-gallery-delete" data-gdel="${idx}" data-gnpc="${escAttr(npcName)}" data-gdisplay="${escAttr(shown)}"><i class="fa-solid fa-xmark"></i></button></div>`;
   });
-  h+=`<div class="th-gallery-add" data-gadd="${escAttr(npcName)}"><i class="fa-solid fa-plus"></i></div>`;
+  h+=`<div class="th-gallery-add" data-gadd="${escAttr(npcName)}" data-gdisplay="${escAttr(shown)}"><i class="fa-solid fa-plus"></i></div>`;
   h+=`</div>`;
   // openModal2 叠加,关闭后回 NPC 详情
-  openModal2(`<i class="fa-solid fa-images"></i> `+esc(npcName)+' · 画廊',h);
+  openModal2(`<i class="fa-solid fa-images"></i> `+esc(shown)+' · 画廊',h);
   // 绑定事件
   setTimeout(()=>{
     // 图片点击→大图查看
@@ -816,14 +817,16 @@ export function openGalleryModal(npcName:string) {
       e.stopPropagation();
       const idx=parseInt(this.getAttribute('data-gdel')||'');
       const nm=this.getAttribute('data-gnpc')||'';
-      if(!isNaN(idx)){ deleteNPCGalleryImage(nm,idx); closeModal2(); openGalleryModal(nm); }
+      const gd=this.getAttribute('data-gdisplay')||'';
+      if(!isNaN(idx)){ deleteNPCGalleryImage(nm,idx); closeModal2(); openGalleryModal(nm,gd||undefined); }
     }));
     // 添加按钮→触发文件选择
     qsa('.th-gallery-add').forEach(btn=>btn.addEventListener('click',function(this:HTMLElement,e:Event){
       e.stopPropagation();
       const nm=this.getAttribute('data-gadd')||'';
+      const gd=this.getAttribute('data-gdisplay')||'';
       const fi=qs<HTMLInputElement>('.th-avatar-file-input');
-      if(fi){ (window as any).__galleryTarget__=nm; fi.setAttribute('multiple','multiple'); fi.click(); fi.removeAttribute('multiple'); }
+      if(fi){ (window as any).__galleryTarget__=nm; (window as any).__galleryDisplay__=gd; fi.setAttribute('multiple','multiple'); fi.click(); fi.removeAttribute('multiple'); }
     }));
   },40);
 }

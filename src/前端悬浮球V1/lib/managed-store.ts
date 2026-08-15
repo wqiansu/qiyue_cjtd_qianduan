@@ -1,17 +1,6 @@
 // managed / tag / stash-kind 数据层 + 类型。
-// 纯数据 CRUD（localStorage 读写）+ 可变全局状态归属 + getStashKindCfg 统一 kind 配置入口。
-//
-// 可变全局引用安全策略：
-// - managedEntryStates / currentManagedItems 是“对象引用型”可变全局——
-//   全文只有属性读写（[kind]=... / [kind][name]），从未整体重新赋值，
-//   故 export let + import {} 保持同一对象引用，安全。
-// - 禁止消费者对这两个变量做整体赋值（managedEntryStates = {...}），
-//   那会断开引用。若未来确需整体赋值，改 getter/setter。
-//
-// ManagedKind / MANAGED_CFG 从 ./config 单向 import，无循环依赖。
-// 类型 ManagedItemV2 / ManagedEntryState / InspectorEntry / StashKindMeta /
-// Tag / TagsByKind / CollapsedByKind 随之搬来。
-// ================================================================
+// 可变全局引用安全：managedEntryStates / currentManagedItems 是“对象引用型”可变全局，
+// 全文只做属性读写，从未整体重新赋值。禁止消费者整体赋值（= {...}），那会断开引用。
 import { type ManagedKind, MANAGED_CFG, LINKS_KIND_FIELDS, LINKS_GRAPH_FORMAT } from './config';
 
 export type ManagedItemV2 = { desc: string; tags: string[]; order?: number; inject?: string; favorite?: boolean; lastEdited?: number; locked?: boolean; links?: { locations?: string[]; events?: string[]; dlcs?: string[] } };
@@ -69,13 +58,12 @@ export function setCurrentManagedItems(kind:ManagedKind, items:Record<string,Man
 function reconcileFromPersisted(kind:ManagedKind) {
   ensureManagedKindInitialized(kind);
   const persisted = getManagedItems(kind);
-  // 以持久化为底，保留内存中可能存在的未落盘改动（current 覆盖 persisted）。
   currentManagedItems[kind] = { ...persisted, ...currentManagedItems[kind] };
 }
 export function addManagedItem(kind:ManagedKind, name:string, item:ManagedItemV2|string) {
   reconcileFromPersisted(kind);
   const migrated = migrateManagedItem(item);
-  migrated.lastEdited = Date.now(); // 新建/更新时自动更新时间戳
+  migrated.lastEdited = Date.now();
   currentManagedItems[kind][name] = migrated;
   saveManagedOverrides(kind);
 }
@@ -86,10 +74,12 @@ export function deleteManagedItem(kind:ManagedKind, name:string) {
 }
 export function toggleFavorite(kind:ManagedKind, name:string): boolean {
   ensureManagedKindInitialized(kind);
-  const item = currentManagedItems[kind][name];
+  const items = getManagedItems(kind);
+  const item = items[name];
   if (!item) return false;
   item.favorite = !item.favorite;
   item.lastEdited = Date.now();
+  setCurrentManagedItems(kind, items);
   saveManagedOverrides(kind);
   return !!item.favorite;
 }
@@ -144,7 +134,6 @@ export function addStashKind(kindName: string, meta: StashKindMeta) {
   const kinds = loadStashKinds();
   kinds[kindName] = meta;
   saveStashKinds(kinds);
-  // 确保 currentManagedItems 中有该 kind 的空对象
   const kindKey = `stash-custom-${kindName}` as ManagedKind;
   if (!currentManagedItems[kindKey]) {
     currentManagedItems[kindKey] = {};
@@ -177,7 +166,6 @@ export function deleteStashKind(kindName: string): number {
   const kinds = loadStashKinds();
   delete kinds[kindName];
   saveStashKinds(kinds);
-  // 删除旧 kind 的数据与标签命名空间
   const storageKey = getStashKindStorageKey(kindName);
   try { localStorage.removeItem(storageKey); } catch(e) { void e; }
   if (tags[oldKind]) delete tags[oldKind];
@@ -224,7 +212,6 @@ export function renameTag(kind: ManagedKind, oldName: string, newName: string) {
   delete tags[kind][oldName];
   saveTags(tags);
 
-  // 更新所有卡片上的标签名
   const items = getManagedItems(kind);
   let changed = false;
   for (const itemName of Object.keys(items)) {
@@ -313,7 +300,6 @@ export type LinksGraph = {
   links: Record<'location' | 'event' | 'dlc', Record<string, LinksNode>>;
 };
 
-// 收集本地 location/event/dlc 三类卡片 links，组装成关联图
 export function loadLinksGraph(): LinksGraph {
   const links: LinksGraph['links'] = { location: {}, event: {}, dlc: {} };
   for (const kind of ['location', 'event', 'dlc'] as const) {
@@ -331,7 +317,6 @@ export function loadLinksGraph(): LinksGraph {
   return { format: LINKS_GRAPH_FORMAT, links };
 }
 
-// 关联图落盘：触发三类 saveManagedOverrides（关联图无独立存储，是 links 投影）
 export function saveLinksGraph(): void {
   saveManagedOverrides('location');
   saveManagedOverrides('event');
@@ -348,7 +333,7 @@ export function mergeLinksGraphIntoLocal(graph: LinksGraph): { added: number; sk
   const graphLinks = (graph && graph.links) || { location: {}, event: {}, dlc: {} };
 
   for (const kind of linkKinds) {
-    const selfField = LINKS_KIND_FIELDS[kind]; // location→locations, event→events, dlc→dlcs
+    const selfField = LINKS_KIND_FIELDS[kind];
     const items = getManagedItems(kind);
     const nodes = graphLinks[kind] || {};
     for (const [name, node] of Object.entries(nodes)) {
@@ -367,7 +352,6 @@ export function mergeLinksGraphIntoLocal(graph: LinksGraph): { added: number; sk
         const existing = items[name].links?.[field] || [];
         for (const targetName of arr) {
           if (!targetName) continue;
-          // 检查目标卡片是否存在（不存在 → 孤儿）
           const targetItems = getManagedItems(targetKind);
           if (!targetItems[targetName]) {
             orphans.push({ kind, field, name, refs: [targetName] });

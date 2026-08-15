@@ -39,6 +39,7 @@ export async function openWorldbookInspectorModal(filter='') {
 // IME 组字标志：避免 input 事件在拼音组字过程中触发搜索重渲染导致输入中断。
 // 模块闭包变量（单实例，无并发需求）。
 let wbSearchComposing = false;
+let wbSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 function renderWorldbookInspectorBody(entries:InspectorEntry[], filter:string): string {
   const q=filter.trim().toLowerCase();
@@ -53,9 +54,10 @@ function renderWorldbookInspectorList(items:InspectorEntry[]): string {
     const managed=item.managedKind?`<span class=\"th-wb-prefix ${item.managedKind}\">${MANAGED_CFG[item.managedKind].prefix}</span>`:'';
     const strategy=e.strategy?.type||'constant';
     const pos=e.position||{} as WorldbookEntry['position'];
+    const bm=e.enabled?`<span class=\"th-bm\" data-st=\"on\" aria-hidden=\"true\"></span>`:'';
     return `<div class=\"th-wb-row\" data-wb=\"${escAttr(item.worldbookName)}\" data-uid=\"${e.uid}\">
       <div class=\"th-wb-row-main\">
-        <span class=\"th-bind-dot ${e.enabled?'bound':'unbound'}\"></span>
+        <span class=\"th-bm-slot\">${bm}</span>
         <div class=\"th-wb-row-title\"><span class=\"th-wb-name\">${managed}${esc(e.name)}</span><span class=\"th-wb-book\"><i class=\"fa-solid fa-book\"></i> ${esc(item.worldbookName)} · order ${esc(pos.order??0)}</span></div>
       </div>
       <div class=\"th-wb-row-actions\">
@@ -74,11 +76,13 @@ function bindWorldbookInspectorEvents(filter:string, entries:InspectorEntry[]) {
   qs('#th-wb-search')?.addEventListener('compositionstart',()=>{ wbSearchComposing=true; });
   qs('#th-wb-search')?.addEventListener('compositionend',function(this:HTMLInputElement){
     wbSearchComposing=false;
-    renderWorldbookSearchBody(entries,this.value);
+    if(wbSearchTimer) clearTimeout(wbSearchTimer);
+    wbSearchTimer=setTimeout(()=>renderWorldbookSearchBody(entries,this.value),220);
   });
   qs('#th-wb-search')?.addEventListener('input',function(this:HTMLInputElement){
     if(wbSearchComposing) return;
-    renderWorldbookSearchBody(entries,this.value);
+    if(wbSearchTimer) clearTimeout(wbSearchTimer);
+    wbSearchTimer=setTimeout(()=>renderWorldbookSearchBody(entries,this.value),220);
   });
   bindWorldbookRows(filter);
 }

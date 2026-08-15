@@ -1,7 +1,3 @@
-// 各 APP 通用设置面板（world-app-settings.ts）
-// 给每个 APP 一套统一可嵌入的「世界书注入设置 + API 利用设置 + 已注入条目管理」UI。
-//   各 APP 在自己的设置 sheet 里调用 wbSyncPanelHtml(appId) / apiPlanPanelHtml(appId) 取 HTML，
-//   并在事件委托里调用 bindWbSyncPanel / bindApiPlanPanel 绑定交互。纯 UI 层，命令式 innerHTML。
 import { esc, escAttr } from '../../lib/dom-utils';
 import { iconHtml } from '../../lib/icons';
 import {

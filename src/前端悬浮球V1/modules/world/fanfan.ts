@@ -1,10 +1,3 @@
-// 世界套件 —— 饭饭（fanfan.ts）UI 模块
-// PC 三栏「仙宫版大众点评」，番茄红橙(#f97316→#fb7185)。探店种草 + 排队打卡 + 榜单口碑 的本地生活社区。
-//   左栏(thw-fan-side)：品牌+节拍 / 逛(附近好店·口碑榜单·探店笔记) / 我的 / 设置。
-//   中栏(thw-fan-content)：四 tab（附近好店瀑布流 / 口碑榜单 / 探店笔记社区 / 我的）+ 品类快筛(顶栏下方，照抄美团) + 覆盖/增量刷新养店。
-//   右栏(thw-fan-inspector)：店铺详情（店头/招牌菜/三维评分/评价卡/操作条）——详情打开时变主阅读区。
-// 与美团错开：饭饭管决策+内容+口碑，详情「去美团下单」互链交易闭环。
-// 注入走 inject-plan（片段化）；破限进 ordered_prompts[0]；设置 master-detail 局部刷新；全女性百合生态。
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { openModal2 } from '../../status-bar-init';
 import { phoneShellHtml, startPhoneClock } from '../../lib/world/phone-shell';

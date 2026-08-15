@@ -1,5 +1,3 @@
-// 日记（diary）数据层（diary-store.ts）
-// 玩家视角（手写）+ 角色视角（AI 按角色 POV + 楼层生成）。标签/角色筛选、详情阅读编辑。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
 export type DiaryEntry = {
@@ -7,18 +5,17 @@ export type DiaryEntry = {
   title: string;
   body: string;
   author: string;           // 落款（玩家名 / 角色名）
-  pov: 'player' | 'char';   // 玩家手写 / 角色 AI
-  dateLabel: string;        // 文字日期，如「2026年6月27日 星期五」或剧情时间
+  pov: 'player' | 'char';
+  dateLabel: string;        // 文字日期，如「2026年6月27日 星期五」
   weather?: string;
-  mood?: string;            // 心情 id（DIARY_MOODS 之一）
+  mood?: string;
   locked?: boolean;         // 私密锁：锁定的日记永不进世界书注入/同步
-  summary?: string;         // AI 提取的一句话摘要（入库，供注入/回看用）
-  book?: string;            // 分册/本子名（如 日常/情事/梦境），空=默认本
+  summary?: string;
+  book?: string;
   tags: string[];
   ts: number;
 };
 
-// 心情系统（表情 + 颜色），右栏画心情轨迹用。10 种，覆盖文学向私密日记高频情绪。
 export const DIARY_MOODS: { id: string; label: string; emoji: string; color: string }[] = [
   { id: 'happy', label: '愉悦', emoji: '🥰', color: 'pink' },
   { id: 'calm', label: '平静', emoji: '😌', color: 'sky' },
@@ -35,20 +32,18 @@ export function moodOf(id?: string): { id: string; label: string; emoji: string;
   return id ? DIARY_MOODS.find(m => m.id === id) : undefined;
 }
 
-// 日记设置（参考正文楼层 / 注入世界书条目 / 楼层自动触发 / 每篇字数·默认视角·自动频率 /
-//   生态浓度（色情度/日常度）+ 私密锁默认排除同步 + 记忆/同步开关）。
 export type DiarySettings = {
   useFloors: boolean;
   floorCount: number;
   useWorldbook: boolean;
   worldbookEntryKeys: string[];
   autoInterval: number;        // 每 N 楼自动写一篇角色日记，0=关
-  lastFloor: number;           // 上次自动触发时的楼层
-  wordTarget: number;          // 每篇字数目标
-  defaultPov: string;          // 默认视角 char/player
-  ecoErotic: number;           // 色情度浓度 0-100（控制独白情欲浓淡）
-  ecoCarnal: number;           // 肉欲度浓度 0-100（肉体肉欲与诱惑表现强度）
-  ecoDaily: number;            // 日常度浓度 0-100（控制日常 vs 强情绪）
+  lastFloor: number;
+  wordTarget: number;
+  defaultPov: string;
+  ecoErotic: number;           // 色情度浓度 0-100
+  ecoCarnal: number;           // 肉欲度浓度 0-100
+  ecoDaily: number;            // 日常度浓度 0-100
   lockExcludeSync: boolean;    // 私密锁日记不进世界书注入/同步（默认开）
   syncEnabled: boolean;
 };
@@ -83,13 +78,11 @@ export function getAllAuthors(): string[] {
   read().entries.forEach(e => s.add(e.author));
   return [...s];
 }
-// 所有分册名（本子），空册名归入「默认本」由 UI 处理
 export function getAllBooks(): string[] {
   const s = new Set<string>();
   read().entries.forEach(e => { if (e.book && e.book.trim()) s.add(e.book.trim()); });
   return [...s];
 }
-// 随机回顾：抽一篇（可排除私密锁），用于「今日回顾」钩子
 export function randomEntry(includeLocked = false): DiaryEntry | undefined {
   const list = read().entries.filter(e => includeLocked || !e.locked);
   return list.length ? list[Math.floor(Math.random() * list.length)] : undefined;
@@ -115,11 +108,9 @@ export function toggleLock(id: string): boolean {
   write(d);
   return !!e.locked;
 }
-// 心情轨迹：最近 N 篇（按时间正序）的心情 id 序列（无心情的跳过）。
 export function getMoodTrail(limit = 12): { mood: string; ts: number }[] {
   return read().entries.filter(e => e.mood).slice(0, limit).reverse().map(e => ({ mood: e.mood!, ts: e.ts }));
 }
-// 关键词云：从全部日记标签聚合 + 计数，降序。
 export function getTagCloud(): { tag: string; n: number }[] {
   const m = new Map<string, number>();
   read().entries.forEach(e => e.tags.forEach(t => m.set(t, (m.get(t) || 0) + 1)));
@@ -139,7 +130,6 @@ export function deleteEntry(id: string): void {
 }
 export function clearAll(): void { const d = read(); write({ entries: [], settings: d.settings }); }
 
-// ---- 设置 ----
 export function getDiarySettings(): DiarySettings {
   const d = read();
   return { ...DEFAULT_DIARY_SETTINGS, ...(d.settings || {}) };

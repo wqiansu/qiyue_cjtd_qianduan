@@ -1,11 +1,4 @@
-// ============================================================================
-// places-ui.ts — 地点演化独立视图（世界演化顶部「地点」tab）
-//
-// 由 evolution.ts 以 host 方式挂载：_mode==='places' 时主区交给 placesInnerHtml；
-// 点击/change 先经 placesClick/placesChange（返回 true 即已处理），再由 evolution 统一 render()。
-//
-// 核心：地点推演是「镜头外这个地方自己在过日子」，绝不把正文主角搬进来演戏（见 place-prompts）。
-// ============================================================================
+// 地点推演：镜头外地方自己过日子，绝不把正文主角搬进来演（见 place-prompts）。
 import { esc } from '../../lib/dom-utils';
 import { iconHtml } from '../../lib/icons';
 import { thToast, thConfirm, thPrompt } from '../../lib/world/ui-kit';

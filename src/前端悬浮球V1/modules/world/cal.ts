@@ -1,9 +1,3 @@
-// 世界套件 —— 日历（cal）模块（cal.ts）
-// 三栏 master-detail（.thw-cal-app2）：左导航(月历/周视图/纪事流/约局提醒/节日纪元/设置) /
-//   中主区(真实月历格 / 周视图 / 纪事时间线) / 右检视(当日详情：干支节气·宜忌·事件·节日·AI 补全·联动日记)。
-// 真实感：仿真实日历 App / 网页端日历——月格彩点+角标、今日高亮、当日检视栏、约局来源标、节日纪元条。
-// 五大增强：①约局提醒聚合(其它 app 把约定推进来) ②节日纪元读绑定世界书 ③联动日记 ④周视图+纪事流 ⑤生态/密度。
-// 设置：上下文与世界书 / API利用 / 功能提示词(破限置顶) / 生态浓度 / 日历专属 / 自动触发 / 记忆与数据。
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { getRoot } from '../../lib/tavern-api';
 import { openModal2 } from '../../status-bar-init';
@@ -32,7 +26,7 @@ import { isWorldbookAvailable, buildInjectFromKeys } from '../../lib/world/world
 import { openSessionMemory } from './memory-center';
 import {
   CAL_MEMO_TYPES, memoTypeLabel, memoTypeColor, memoTypeByLabel,
-  getMemosByDate, getDatesWithMemos, getMemosOfMonth, getUpcomingMemos, getMemos,
+  getMemosByDate, getMemosOfMonth, getUpcomingMemos, getMemos,
   addMemo, addMemosBulk, deleteMemo, toggleDone, clearAll, holidayOf, pushCalendarEvent,
   getCalSettings, updateCalSettings,
 } from '../../lib/world/cal-store';
@@ -208,7 +202,6 @@ registerInjectPlan({
 });
 
 function calJailbreak(): string { return (getPromptText('cal.jailbreak') || '').trim(); }
-// 生态浓度 → 给 AI 的逐条调校（通用化读设置，不写死提示词）。
 function ecoDirective(): string {
   const s = getCalSettings();
   const lvl = (n: number, v0: string, v1: string, v2: string, v3: string, v4: string) => n < 40 ? v0 : n < 80 ? v1 : n < 120 ? v2 : n < 160 ? v3 : v4;
@@ -256,7 +249,6 @@ let _setCat = 'context';
 let _promptEditId: string | null = null;
 let _lastAutoInterval = 20;   // 开关 ON 时回填的最近非零楼数（默认 20）
 
-// 取剧情时间（优先世界信息日期，回退真实今天）
 function storyToday(): { y: number; m: number; d: number; raw: string } {
   try {
     const bridge = (window as any).__thStatusBarData || (getRoot() as any).__thStatusBarData;
@@ -290,10 +282,9 @@ function worldInfoBlock(): string {
 //   深度 injectPrompts 无 chat_history 锚点会丢失，故改为字符串拼接）。
 async function buildCalWbInject(): Promise<string> {
   const s = getCalSettings();
-  if (!s.worldbookEntryKeys.length) return '';   // 勾了条目就注入
+  if (!s.worldbookEntryKeys.length) return '';
   try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); return text ? `\n\n【绑定世界书条目（世界设定，参考勿复述）】\n${text.trim()}` : ''; } catch (e) { void e; return ''; }
 }
-// 周视图：以 _selDate 所在周为基准的 7 天
 function weekDays(): { y: number; m: number; d: number; dk: string }[] {
   const base = new Date(_selDate + 'T00:00:00');
   const weekStart = getCalSettings().weekStart === 1 ? 1 : 0;
@@ -333,9 +324,21 @@ function sidebarHtml(): string {
   </div>`;
 }
 
+// 按日期分组的日程表。每桶的排序必须与 getMemosByDate 一致（按 time 升序）——
+// dotsFor 的「取前 4 色」依赖这个顺序。
+type MemoBuckets = Map<string, ReturnType<typeof getMemos>>;
+function memoBuckets(): MemoBuckets {
+  const by: MemoBuckets = new Map();
+  for (const m of getMemos()) {
+    const b = by.get(m.dateKey);
+    if (b) b.push(m); else by.set(m.dateKey, [m]);
+  }
+  for (const b of by.values()) b.sort((a, c) => (a.time || '').localeCompare(c.time || ''));
+  return by;
+}
+
 // 当日彩点：取该日全部日程的类型色（去重，最多 4 个）
-function dotsFor(dk: string): string {
-  const ms = getMemosByDate(dk);
+function dotsFor(ms: ReturnType<typeof getMemos>): string {
   if (!ms.length) return '';
   const colors = [...new Set(ms.map(m => memoTypeColor(m.type)))].slice(0, 4);
   return `<span class="thw-cal-dots">${colors.map(c => `<i class="thw-cal-dot thw-cal-c-${esc(c)}"></i>`).join('')}</span>`;
@@ -343,6 +346,7 @@ function dotsFor(dk: string): string {
 
 // ---- 中列：月历 ----
 function monthGrid(): string {
+  const buckets = memoBuckets();
   const weekStart = getCalSettings().weekStart === 1 ? 1 : 0;
   const first = new Date(_year, _month - 1, 1);
   const rawW = first.getDay();
@@ -359,11 +363,12 @@ function monthGrid(): string {
     const isToday = today.y === _year && today.m === _month && today.d === d;
     const isSel = dk === _selDate;
     const hol = holidayOf(_month, d);
-    const n = getMemosByDate(dk).length;
+    const ms = buckets.get(dk) || [];
+    const n = ms.length;
     cells.push(`<button class="thw-cal-cell${isToday ? ' is-today' : ''}${isSel ? ' is-sel' : ''}" data-cal-day="${dk}" type="button">
       <span class="thw-cal-dnum">${d}</span>
       ${hol ? `<span class="thw-cal-hol">${esc(hol)}</span>` : ''}
-      ${dotsFor(dk)}
+      ${dotsFor(ms)}
       ${n > 1 ? `<span class="thw-cal-cnt">${n}</span>` : ''}
     </button>`);
   }
@@ -384,8 +389,9 @@ function monthGrid(): string {
 function weekView(): string {
   const days = weekDays();
   const today = storyToday();
+  const buckets = memoBuckets();
   const cols = days.map(dd => {
-    const ms = getMemosByDate(dd.dk);
+    const ms = buckets.get(dd.dk) || [];
     const isToday = today.raw === dd.dk;
     const isSel = dd.dk === _selDate;
     const items = ms.length
@@ -415,7 +421,6 @@ function weekView(): string {
 function emptyBlock(sub: string): string {
   return `<div class="thw-empty">${iconHtml('fa-calendar-days')}<div class="thw-empty-t">这里还是空的</div><div class="thw-empty-d">${esc(sub)}</div></div>`;
 }
-// 一条日程行（纪事流/约局/检视通用）
 function memoRow(m: ReturnType<typeof getMemosByDate>[number], showDate = false): string {
   const src = m.sourceLabel ? `<span class="thw-cal-src">${iconHtml('fa-share-nodes')} ${esc(m.sourceLabel)}</span>` : '';
   return `<div class="thw-cal-row thw-cal-c-bd-${esc(memoTypeColor(m.type))}${m.done ? ' is-done' : ''}" data-cal-memo="${escAttr(m.id)}">
@@ -436,7 +441,6 @@ function memoRow(m: ReturnType<typeof getMemosByDate>[number], showDate = false)
 // ---- 中列：纪事流（按月分组的时间线）----
 function streamView(): string {
   const list = getMemosOfMonth(_year, _month);
-  // 按日期分组
   const groups: Record<string, typeof list> = {};
   for (const m of list) (groups[m.dateKey] ||= []).push(m);
   const today = storyToday();
@@ -477,7 +481,6 @@ function trystView(): string {
 
 // ---- 中列：节日纪元 ----
 function festivalView(): string {
-  // 收集所有「节日」类型 memo（按日期排）
   const fests = getUpcomingMemos('0000-00-00', 400).filter(m => m.type === 'festival').sort((a, b) => a.dateKey.localeCompare(b.dateKey));
   const body = fests.length
     ? fests.map(m => `<div class="thw-cal-fest thw-card">
@@ -503,7 +506,6 @@ const _ZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '�
 const _YI_POOL = ['会友', '祈福', '修行', '沐浴', '出行', '纳采', '开市', '立约', '习艺', '宴饮', '赏花', '静养', '整妆', '入学'];
 const _JI_POOL = ['争讼', '动土', '远行', '嫁娶', '安床', '闭关', '破限', '赊贷', '口舌', '熬夜', '独处'];
 function huangliOf(dateKey: string): { ganzhi: string; yi: string[]; ji: string[] } {
-  // 以日期字符串生成稳定序号
   let h = 0; for (let i = 0; i < dateKey.length; i++) h = (h * 31 + dateKey.charCodeAt(i)) >>> 0;
   const ganzhi = _GAN[h % 10] + _ZHI[h % 12] + '日';
   const pick = (pool: string[], seed: number, n: number) => {
@@ -515,7 +517,6 @@ function huangliOf(dateKey: string): { ganzhi: string; yi: string[]; ji: string[
   return { ganzhi, yi: pick(_YI_POOL, 7, 3), ji: pick(_JI_POOL, 13, 2) };
 }
 
-// 右检视：当日详情（日期头 + 节日 + 干支/天气文字档 + 日程清单 + AI 补全今日 + 联动日记）
 function dayInspector(): string {
   const ms = getMemosByDate(_selDate);
   const today = storyToday();
@@ -717,7 +718,6 @@ function render(): void {
   else if (_view.name === 'tryst') content = trystView();
   else if (_view.name === 'festival') content = festivalView();
   else content = monthGrid();
-  // 设置页自带左右分栏，不显示右侧 inspector；其余主视图带当日检视。
   const showInspector = _view.name !== 'settings';
   root.innerHTML = `<div class="thw-app thw-cal-app2">
     <div class="thw-body">${sidebarHtml()}${content}${showInspector ? dayInspector() : ''}</div>
@@ -746,9 +746,10 @@ async function genSchedule(targetDate?: string): Promise<void> {
   try {
     const today = storyToday();
     const count = planCount('cal', 'scheduleCount');
-    const existing = getDatesWithMemos();
     const existLines: string[] = [];
-    existing.forEach(dk => { getMemosByDate(dk).forEach(m => existLines.push(`${dk}${m.time ? ' ' + m.time : ''} [${memoTypeLabel(m.type)}] ${m.title}`)); });
+    for (const [dk, ms] of memoBuckets()) {
+      for (const m of ms) existLines.push(`${dk}${m.time ? ' ' + m.time : ''} [${memoTypeLabel(m.type)}] ${m.title}`);
+    }
     const focusLine = targetDate ? `\n【本轮聚焦】请重点把 ${targetDate} 这一天的日程补全（也可顺带排紧邻几天的强关联事项）。` : '';
     const system = getPromptText('cal.schedule')
       .replace(/\{\{storyTime\}\}/g, today.raw)
@@ -778,7 +779,6 @@ async function genSchedule(targetDate?: string): Promise<void> {
   finally { _busy = false; render(); }
 }
 
-// 手动新增节日——不走 AI，玩家自己填「日期/名称/习俗说明」，与提取的节日同池渲染/注入。
 async function manualAddFestival(): Promise<void> {
   const title = await thPrompt({ title: '新增节日', message: '节日名称：', value: '' });
   if (title == null || !title.trim()) return;
@@ -791,7 +791,6 @@ async function manualAddFestival(): Promise<void> {
   thToast(`已新增节日「${title.trim()}」`, 'success');
   render();
 }
-// 节日纪元提取
 async function genFestival(): Promise<void> {
   if (_busy) return;
   if (!isFeatureOn('cal', 'festival')) { thToast('「节日纪元」已在 API 设置中关闭', 'warn'); return; }
@@ -800,8 +799,6 @@ async function genFestival(): Promise<void> {
     const today = storyToday();
     const count = planCount('cal', 'festivalCount');
     const cs = getCalSettings();
-    // 节日读绑定世界书：开→强制带上勾选的世界书条目并要求「只从设定提取本世界历法」；
-    //   关→退化为按世界观风格新拟（不套现实节日）。
     const festGuide = cs.festivalFromWb
       ? '\n\n【本世界历法来源】务必只依据下方绑定世界书/设定资料里出现的纪元、节庆、历法线索来提取，宁缺毋滥，不要套用现实世界的节日；若设定中确无节日线索，可返回空数组。'
       : '\n\n【本世界历法来源】设定中若无明确节日，可依据世界观基调（仙侠/现代/奇幻等）合理新拟贴合的节庆，但不要直接套用现实节日名。';
@@ -824,7 +821,6 @@ async function genFestival(): Promise<void> {
   finally { _busy = false; render(); }
 }
 
-// 联动日记：把当日事件带入日记 app 代笔（调用 diary 模块导出的 API）
 function toDiary(): void {
   const ms = getMemosByDate(_selDate);
   const brief = ms.length ? ms.map(m => `${m.time ? m.time + ' ' : ''}[${memoTypeLabel(m.type)}] ${m.title}${m.note ? '（' + m.note + '）' : ''}`).join('\n') : '';
@@ -966,7 +962,6 @@ function onSheetClick(t: HTMLElement, e: Event): boolean {
     if (saveBtn) { const txt = (rootEl()?.querySelector('.thw-cal-prompt-text') as HTMLTextAreaElement | null)?.value ?? ''; setPromptOverride(saveBtn.getAttribute('data-cal-prompt-save') || '', txt); _promptEditId = null; render(); thToast('已保存提示词', 'success'); return true; }
     const resetBtn = t.closest('[data-cal-prompt-reset]') as HTMLElement | null;
     if (resetBtn) { resetPrompt(resetBtn.getAttribute('data-cal-prompt-reset') || ''); render(); thToast('已恢复默认', 'success'); return true; }
-    // 「用 AI 重写这条提示词」生成按钮——填回 textarea，不直接落库。
     if (bindAiPromptEditor(e, () => (rootEl()?.querySelector('.thw-cal-prompt-text') as HTMLTextAreaElement | null)?.value ?? '', (text) => { const ta = rootEl()?.querySelector('.thw-cal-prompt-text') as HTMLTextAreaElement | null; if (ta) ta.value = text; })) return true;
     if (t.closest('[data-cal-sheet-body]')) return true;
     return false;
@@ -1015,7 +1010,6 @@ export function openCal(): void {
   const d = storyToday(); _year = d.y; _month = d.m; _selDate = d.raw; _view = { name: 'month' }; _sheet = null; _promptEditId = null;
   openApp();
 }
-// 供其它 app 推送约局/事件进日历（约局提醒聚合）。
 export function calPushEvent(p: { dateKey: string; time?: string; title: string; type?: string; sourceApp: string; sourceLabel?: string; note?: string }): boolean {
   try { if (!getCalSettings().aggregateExternal) return false; return !!pushCalendarEvent(p); } catch (e) { void e; return false; }
 }

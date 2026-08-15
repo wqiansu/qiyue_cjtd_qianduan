@@ -1,11 +1,4 @@
-// 世界套件桌面壳 + APP 路由 + 套件设置（world-app）
-// 入口：顶栏「世界」按钮 → openWorldApp() 打开全屏「手机桌面」大 modal。
-// 桌面：读 world-store 的 APP 注册表渲染图标网格（自注册，做到哪显示哪）；
-//       顶部状态条显示酒馆「世界信息」的日期/时间/天气（呼应沉浸感）。
-// 路由：桌面 ↔ APP 视图 ↔ 套件设置 全部用 openModal2 的 reset/replace 在同一 modal 内切换，
-//       不堆叠多层。APP 内部子弹窗才 push。
-// 跨窗口：所有交互用 data 属性 + addEventListener 委托（不用 inline onclick）；
-//         读全局接口 window 优先 → getRoot() 兜底（跨窗口陷阱）。
+// 读全局接口 window 优先 → getRoot() 兜底（跨窗口陷阱）。
 import { esc, qs } from '../../lib/dom-utils';
 import { openModal2, closeModal2 } from '../../status-bar-init';
 import { getRoot } from '../../lib/tavern-api';
@@ -127,7 +120,6 @@ function renderDesktopHtml(): string {
   </div>`;
   const grid = apps.length
     ? `<div class="th-world-grid">${apps.map(a => {
-        // 桌面图标红点已移除（AI 生成时玩家正开着对应界面，未读即时清零，红点从不出现，纯噪声）。
         return `<button class="th-world-app-icon" data-world-open="${esc(a.id)}" type="button" title="${esc(a.name)}">
           <span class="th-world-app-badge" style="${a.accent ? `background:${esc(a.accent)}` : ''}">${iconHtml(a.icon)}</span>
           <span class="th-world-app-name">${esc(a.name)}</span>
@@ -201,11 +193,18 @@ export function getWorldUnreadTotal(): number {
   return n;
 }
 
-// 红点功能已移除。此函数保留为空操作，兼容各 app 里仍在调用的 refreshWorldUnread（不报错、不做事）。
-export function refreshWorldUnread(): void { /* no-op：聚合/桌面红点已移除 */ }
+export function refreshWorldUnread(): void { /* no-op：兼容仍在调用的 refreshWorldUnread */ }
 
 // 调试挂载
 try {
   const w = (typeof window !== 'undefined' ? window : globalThis) as any;
   w.__th_world_app__ = { openWorldApp, closeWorldApp, getWorldUnreadTotal, refreshWorldUnread };
 } catch (e) { void e; }
+
+// 桥持有本模块闭包，拆卸时必须撤，否则宿主页留住整个 iframe 模块图
+export function disposeWorldAppBridge(): void {
+  try {
+    const w = (typeof window !== 'undefined' ? window : globalThis) as any;
+    delete w.__th_world_app__;
+  } catch (e) { void e; }
+}

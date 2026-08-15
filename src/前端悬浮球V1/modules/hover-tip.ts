@@ -1,9 +1,3 @@
-// 悬停浮窗系统 + metric wheel + 状态/衣物详情弹窗 + 地点/事件 hover。
-// 放 modules/（非 lib/）：showLocHover 依赖 managed-modal.getDisplayDesc、
-// openStatusDetail/openClothingDetailModal 依赖主文件 openModal/openModal2 + isEditMode，
-// 依赖指向上层，故归 modules 而非 lib 叶子层。
-// isEditMode 是主文件 whole-reassigned 状态，模块只读 → 懒读 getter getStatusEditMode。
-// ================================================================
 import { esc, escAttr, qs, clamp, editableInput, editableTextarea, __doc, __body, __win } from '../lib/dom-utils';
 import { type ManagedKind, NPC_METRICS } from '../lib/config';
 import { parsePart, partGroup } from '../lib/body-parts';
@@ -18,13 +12,6 @@ let hoverTimeout: ReturnType<typeof setTimeout>|null = null;
 let activeHoverCleanup: (() => void)|null = null;
 let activeLocCleanup: (() => void)|null = null;
 
-// .th-hover-tip portal 化到 parent body（z-index 110000 + pointer-events: auto）。
-// 模仿 .th-loc-hover-tip 套路：lazy 创建 + __doc.createElement + __body.appendChild。
-// 模板里 .th-hover-tip 节点已删除，portal 节点由本函数首次调用时挂载。
-// keepalive 监听器在节点创建时一次性挂上（所有 5 个 show 函数共用）：
-//   鼠标移入 tip 取消 hideHoverTip 的 140ms 延迟；移出 tip 立即关。
-// 必须设 keepalive 常驻，否则 CSS pointer-events: auto 也会因 140ms 延迟后必关而无法让背包/技能移入。
-// 保持监听器常驻即可（display: none 时不触发）。
 let hoverTip: HTMLElement | null = null;
 function ensureHoverTip(): HTMLElement {
   if (!hoverTip) {
@@ -32,12 +19,7 @@ function ensureHoverTip(): HTMLElement {
     hoverTip.className = 'th-hover-tip';
     hoverTip.style.display = 'none';
     hoverTip.onmouseenter = () => { if (hoverTimeout) { clearTimeout(hoverTimeout); hoverTimeout = null; } };
-    // onmouseleave 用 140ms 宽容而非立即 hideHoverTipNow，
-    // 避免浮窗定位微调/锚点 hover-transform 抖动瞬间触发 mouseleave 导致「立刻闪关」。
     hoverTip.onmouseleave = () => { hideHoverTip(); };
-    // 浮窗内衣物 chip 点击切换（data 属性委托）。
-    // 列表浮窗(showClothingHoverTip)的 chip 可切换；切换后 skipRender 就地刷新浮窗内容，
-    // 不重绘状态栏（避免 grid 角标锚点重建导致浮窗闪退）。
     hoverTip.addEventListener('click', (e:MouseEvent) => {
       const chip = (e.target as HTMLElement).closest('[data-clothing-toggle]') as HTMLElement | null;
       if (!chip) return;
@@ -47,12 +29,10 @@ function ensureHoverTip(): HTMLElement {
       const cname = chip.getAttribute('data-clothing-name') || '';
       if (!owner || !cname) return;
       toggleClothingField(owner, cname, fld, { skipRender: true });
-      // 就地刷新当前列表浮窗：清缓存 + 重新读 currentData 重建 HTML
       _clothingHoverCache.clear();
       if (__activeClothingListHover && hoverTip) {
         const cd = getCurrentStatusData();
         const all = cd ? (_.get(cd, `${__activeClothingListHover.ownerPath}.当前穿着衣物`, {}) || {}) : {};
-        // 子集视图下切「穿着情况」会把这件挪出当前分组，浮窗里保留它才不会点一下就消失
         const sub = __activeClothingListHover.subset;
         const fresh = filterClothingSubset(all, sub);
         if(sub!=='__all' && all[cname] && !fresh[cname]) fresh[cname]=all[cname];
@@ -79,28 +59,20 @@ function positionTipWithFloatingUi(
 ) {
   const { placement = 'right-start', offset: off = 12, maxW, show = true } = opts;
   if (maxW) tip.style.maxWidth = `${maxW}px`;
-  // 释放旧 cleanup
   const prev = pool === 'hover' ? activeHoverCleanup : activeLocCleanup;
   if (prev) { prev(); }
-  // 清残留：定位前重置 left/top，避免显示瞬间闪上次的旧位置
   tip.style.left = '0px';
   tip.style.top = '0px';
-  // 临时隐藏以测量 + 避免首次左上角闪烁
   if (show) {
     tip.style.visibility = 'hidden';
     tip.style.display = 'block';
   }
   let stopped = false;
 
-  // autoUpdate 会在 anchor :hover transform 每帧变化时持续重定位 tip（22 次 rAF/单次 hover），
-  // 导致浮窗在旧位置↔新位置间抖动 + 残留旧位置闪现。
-  // hover 类浮窗改「拍一次 anchor 几何快照 → 单次 computePosition」，并只在 scroll/resize 时
-  // 用新快照重定位（不再每帧跟 transform）。loc 类仍用 autoUpdate（长留态需跟滚动）。
   const runLocate = async () => {
     if (!anchor.isConnected) { stop(); return; }
     const anchorRect = anchor.getBoundingClientRect();
     if (anchorRect.width === 0 && anchorRect.height === 0) { return; }
-    // floating-ui 需要实时 rect 计算 flip/shift；用当前快照构造一个伪元素几何接受 computePosition
     const { x, y } = await computePosition(anchor, tip, {
       placement,
       strategy: 'fixed',
@@ -121,7 +93,7 @@ function positionTipWithFloatingUi(
     // 状态栏 DOM 在 parent.document，scroll/resize 挂 parent window（capture:true 捕获各滚动容器）
     __win.addEventListener('scroll', onScrollResize, true);
     __win.addEventListener('resize', onScrollResize);
-    requestAnimationFrame(runLocate); // 首帧定位一次（rAF 等布局稳定）
+    requestAnimationFrame(runLocate);
     cleanup = () => {
       __win.removeEventListener('scroll', onScrollResize, true);
       __win.removeEventListener('resize', onScrollResize);
@@ -157,7 +129,6 @@ function positionTipWithFloatingUi(
 export function showHoverTip(anchor:HTMLElement, type:string, data:Record<string,string>) {
   if(hoverTimeout) clearTimeout(hoverTimeout);
   const tip=ensureHoverTip(); if(!tip) return;
-  // 使用 will-change 提示浏览器优化
   (tip as HTMLElement).style.willChange = 'transform, opacity';
   let html='';
   let typeClass = '';
@@ -202,13 +173,10 @@ export function showHoverTip(anchor:HTMLElement, type:string, data:Record<string
   } else if(type==='counts'){
     html=`<div class="th-hover-tip-title"><i class="fa-solid fa-heart-circle-plus"></i> 亲密记录</div><div class="th-hover-tip-row"><i class="fa-solid fa-star"></i> 高潮次数: <b>${esc(data.orgasm||'0')}</b></div><div class="th-hover-tip-row"><i class="fa-solid fa-water"></i> 被内射次数: <b>${esc(data.creampie||'0')}</b></div>`;
   }
-  // 批量设置，先内容后定位，最后显示，避免首次显示时在左上角闪现
   const maxW = type==='clothing'?320:(type==='pb'?350:(type==='attr'?420:260));
   tip.className = 'th-hover-tip ' + (typeClass || ('th-hover-tip-'+type));
   tip.innerHTML=html;
   positionTipWithFloatingUi(tip, anchor, 'hover', { maxW });
-  // keepalive 监听器在 ensureHoverTip() 创建 portal 节点时已一次性挂上，
-  // 此处不再重复设置。portal 节点生命周期 = 整个 status-bar 生命周期，常驻监听器无副作用。
 }
 export function hideHoverTip() {
   if (hoverTimeout) clearTimeout(hoverTimeout);
@@ -220,13 +188,9 @@ export function hideHoverTipNow() {
   tip.style.display='none';
   tip.className = 'th-hover-tip';
   __activeClothingListHover = null;
-  // keepalive 监听器在 ensureHoverTip() 一次性挂上后保持常驻，display: none 时不触发，无需清空。
   if (activeHoverCleanup) { activeHoverCleanup(); activeHoverCleanup = null; }
 }
 
-// ================================================================
-//  背包全量详情悬停
-// ================================================================
 export function showItemsHoverTip(anchor:HTMLElement, items:Record<string,any>, label:string) {
   if(hoverTimeout) clearTimeout(hoverTimeout);
   const tip=ensureHoverTip(); if(!tip) return;
@@ -271,9 +235,7 @@ export function showSkillsHoverTip(anchor:HTMLElement, skills:Record<string,any>
   tip.innerHTML=html; tip.classList.add('th-hover-tip-full');
   positionTipWithFloatingUi(tip, anchor, 'hover', { maxW: 400 });
 }
-// 衣物全量悬停 — 甜美糖果衣橱列表
 const _clothingHoverCache = new Map<string,string>();
-// 跟踪当前列表浮窗的锚点+owner，供浮窗内 chip 切换后就地刷新
 let __activeClothingListHover: { anchor: HTMLElement; ownerPath: string; subset: string } | null = null;
 /**
  * 衣物子集过滤：卡片展开区的分组 chip 复用同一份列表浮窗，只换进来的条目。
@@ -292,7 +254,6 @@ export function filterClothingSubset(clothing:Record<string,any>, subset:string)
   return out;
 }
 function getClothingCacheKey(clothing:Record<string,any>, ownerPath:string): string {
-  // 缓存 key 加入穿着情况/破损状态/评价 + ownerPath，改值/换 owner 后 hover 不显示旧缓存
   const body = Object.entries(clothing).map(([n,cl])=>{
     const c=cl as any;
     return n+':'+c?.['衣物状态']+':'+c?.['穿着情况']+':'+c?.['破损状态']+':'+c?.['评价'];
@@ -302,7 +263,6 @@ function getClothingCacheKey(clothing:Record<string,any>, ownerPath:string): str
 export function showClothingHoverTip(anchor:HTMLElement, clothing:Record<string,any>, ownerPath:string='', subset:string='__all') {
   if(hoverTimeout) clearTimeout(hoverTimeout);
   const tip=ensureHoverTip(); if(!tip) return;
-  // 清理旧类型类
   tip.className = 'th-hover-tip';
   __activeClothingListHover = { anchor, ownerPath, subset };
   const cacheKey = subset + '##' + getClothingCacheKey(clothing, ownerPath);
@@ -310,7 +270,6 @@ export function showClothingHoverTip(anchor:HTMLElement, clothing:Record<string,
   if(!html){
     html = buildClothingHoverHtml(clothing, ownerPath);
     _clothingHoverCache.set(cacheKey, html);
-    // 限制缓存大小
     if(_clothingHoverCache.size > 50) { const first = _clothingHoverCache.keys().next().value; if(first!==undefined) _clothingHoverCache.delete(first); }
   }
   tip.innerHTML=html;
@@ -357,11 +316,9 @@ function buildClothingHoverHtml(clothing:Record<string,any>, ownerPath:string=''
   }
   return html;
 }
-// NPC状态悬停（装备卡片风格）
 export function showNpcStatusHover(anchor:HTMLElement, statuses:Record<string,any>, npcName:string) {
   if(hoverTimeout) clearTimeout(hoverTimeout);
   const tip=ensureHoverTip(); if(!tip) return;
-  // 彻底清理旧类型类，避免样式残留
   tip.className = 'th-hover-tip';
   const entries=Object.entries(statuses);
   let html=`<div class="th-hover-tip-title"><i class="fa-solid fa-wand-magic-sparkles"></i> ${esc(npcName)} · 当前状态 (${entries.length})</div>`;
@@ -433,9 +390,6 @@ export function hideMetricWheel() {
   if(wheelEl){ wheelEl.style.display = 'none'; }
 }
 
-// ================================================================
-//  状态详情弹窗（编辑支持）
-// ================================================================
 export function openStatusDetail(name:string, effect:string, source:string, duration:string, editPath:string) {
   let h='';
   if(getStatusEditMode()){
@@ -489,9 +443,6 @@ export function openClothingDetailModal(name:string, part:string, state:string, 
   }
 }
 
-// ================================================================
-//  地点/事件总览 hover tip
-// ================================================================
 let locHoverTimer: ReturnType<typeof setTimeout>|null = null;
 let locHoverTip: HTMLElement|null = null;
 

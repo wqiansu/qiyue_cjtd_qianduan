@@ -1,10 +1,3 @@
-// 世界套件 · 注入系统（inject-plan.ts）
-//   ① 片段化：每 app 声明可注入的「片段类型」（registerInjectPlan），玩家可精准勾选注入哪部分（默认全关）。
-//   ② 封套：每片段包成带标签 + 中文说明的封套（who/what/日期/范围/使用须知），封套模板可编辑（prompt-registry）。
-//   ③ 两种去向：世界书条目注入 / 注入到玩家即将输入的那一楼（GENERATION_AFTER_COMMANDS 生成前装配）。
-//   ④ 注入时机：生成前重新装配持久注入（once 一次性注入时机会错位→看不到，故改为生成前重装配）。
-// 默认全部关；不做真宏（仅语义封套）。
-// 纯数据/接口层 + 一个全局事件钩子；window→getRoot 兜底，失败一律降级不 throw。
 import { getRoot, safeTriggerSlash } from '../tavern-api';
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 import { registerPromptTemplate, getPromptText, fillTemplate } from './world-prompts';
@@ -175,6 +168,12 @@ const LS_KEY = WORLD_LS_KEYS.injectsel;
 function readSel(): SelMap { return readWorldJson<SelMap>(LS_KEY, {}); }
 function writeSel(m: SelMap): void { writeWorldJson(LS_KEY, m); }
 
+// 某 app 是否有任何片段开启
+export function appHasActiveSeg(appId: string): boolean {
+  const a = readSel()[appId]; if (!a) return false;
+  return Object.values(a).some(s => s.on);
+}
+
 export function getSegSel(appId: string, segId: string): SegSel {
   const s = readSel()[appId]?.[segId];
   return { on: s?.on ?? false, mode: s?.mode ?? 'floor', scope: s?.scope };   // 默认关、默认楼层注入、范围默认全选
@@ -182,11 +181,6 @@ export function getSegSel(appId: string, segId: string): SegSel {
 export function setSegSel(appId: string, segId: string, patch: Partial<SegSel>): void {
   const m = readSel(); const a = (m[appId] ||= {}); const cur = a[segId] || { on: false, mode: 'floor' as InjectMode };
   a[segId] = { ...cur, ...patch }; writeSel(m);
-}
-// 某 app 是否有任何片段开启
-export function appHasActiveSeg(appId: string): boolean {
-  const a = readSel()[appId]; if (!a) return false;
-  return Object.values(a).some(s => s.on);
 }
 
 // 取某片段的「注入范围」子项列表（无 scope 返回 null）。（含合成片段）

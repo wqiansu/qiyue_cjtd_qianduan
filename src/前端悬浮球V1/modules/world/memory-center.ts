@@ -39,6 +39,7 @@ let _showPreview = false;
 // 跨层多选（供「选择总结」「条目合并」）。key = tier:id
 let _picking = false;
 const _picks = new Set<string>();
+let _memSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 function rootEl(): HTMLElement | null { return qs<HTMLElement>('#' + RID); }
 function pct(n: number, max: number): number { return max <= 0 ? 0 : Math.min(100, Math.round((n / max) * 100)); }
@@ -557,7 +558,12 @@ function bindRoot(): void {
 
   root.addEventListener('input', (e: Event) => {
     const t = e.target as HTMLElement;
-    if (t.classList.contains('thw-mem-search-in')) { _query = (t as HTMLInputElement).value; refreshSidebar(); return; }
+    if (t.classList.contains('thw-mem-search-in')) {
+      _query = (t as HTMLInputElement).value;
+      if (_memSearchTimer) clearTimeout(_memSearchTimer);
+      _memSearchTimer = setTimeout(() => refreshSidebar(), 220);
+      return;
+    }
   });
   root.addEventListener('change', (e: Event) => {
     const t = e.target as HTMLElement;

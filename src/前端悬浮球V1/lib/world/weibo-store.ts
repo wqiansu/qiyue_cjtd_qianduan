@@ -1,6 +1,3 @@
-// 微博数据层（weibo-store.ts）
-// 世界观内的微博：角色当博主发动态，玩家浏览/点赞/评论/转发；可生成热搜。
-// 数据纯本地 _th_world_weibo_v1。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
 // 评论

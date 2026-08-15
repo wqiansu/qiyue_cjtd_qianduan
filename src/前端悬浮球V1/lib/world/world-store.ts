@@ -1,11 +1,3 @@
-// 世界套件·共享数据底座（world-store）
-// 职责：
-//   1. `_th_world_*` localStorage 统一读写（iframe 内 plain localStorage，与整包导出口径一致）。
-//   2. 套件全局配置（comfyui 后端 / 记忆三层阈值 / 桌面主题），玩家在套件设置面板可改。
-//   3. APP 注册表：各 APP 模块自注册到桌面，桌面壳 world-app 只读注册表，不直接 import 各 APP，避免循环依赖。
-//   4. 全部 `_th_world_*` key 汇总（getWorldStorageKeys），供整包导出纳入。
-// 约束：命令式、纯数据层，不碰 DOM；不引 Vue。
-
 // ==================== localStorage key 登记（全部 _th_world_*）====================
 export const WORLD_LS_KEYS = {
   config: '_th_world_config_v1',          // 套件全局配置（本文件）
@@ -29,6 +21,7 @@ export const WORLD_LS_KEYS = {
   xmly: '_th_world_xmly_v1',               // 喜马拉雅·听书电台
   zui: '_th_world_zui_v1',                  // 最右·抽象UGC搞笑社区
   wkb: '_th_world_wkb_v1',                   // 工作台·通用AI造物机（模板/产物/设置，纯本地）
+  places: '_th_world_places_v1',            // 地点簿（place-store.ts），导出/重置需纳入
   prompts: '_th_world_prompts_v1',        // 各 APP 提示词模板覆盖（world-prompts.ts）
   wstate: '_th_world_wstate_v1',          // 结构化世界态（演化双模式，world-state-store.ts）
   wbsync: '_th_world_wbsync_v1',          // 各 APP 世界书注入配置（wb-sync.ts）
@@ -111,32 +104,44 @@ export const DEFAULT_WORLD_CONFIG: WorldConfig = {
 };
 
 // ==================== 通用 JSON 读写（_th_world_*）====================
+// 按原始字符串 memo：同 key 未变则复用已 parse 对象，跨窗口天然正确（父窗口改 raw 即失效）。
+// 不变式：调用方「改了就写」——读出的对象是共享引用，改了不写会污染后续读。
+const _rwJsonMemo = new Map<string, { raw: string; val: unknown }>();
 export function readWorldJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (raw == null) return fallback;
+    const hit = _rwJsonMemo.get(key);
+    if (hit && hit.raw === raw) return hit.val as T;
     const parsed = JSON.parse(raw);
-    return (parsed ?? fallback) as T;
+    const val = (parsed ?? fallback) as T;
+    _rwJsonMemo.set(key, { raw, val });
+    return val;
   } catch (e) { void e; return fallback; }
 }
 export function writeWorldJson(key: string, value: unknown): void {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { void e; }
+  const raw = JSON.stringify(value);
+  try { localStorage.setItem(key, raw); } catch (e) { void e; }
+  _rwJsonMemo.set(key, { raw, val: value });
 }
 
 // ==================== 套件配置读写 ====================
 let _configCache: WorldConfig | null = null;
+let _configRaw: string | null = null;
 export function getWorldConfig(): WorldConfig {
-  if (_configCache) return _configCache;
-  const raw = readWorldJson<Partial<WorldConfig>>(WORLD_LS_KEYS.config, {});
+  const raw = localStorage.getItem(WORLD_LS_KEYS.config);
+  if (_configCache && raw === _configRaw) return _configCache;
+  const parsed = raw ? readWorldJson<Partial<WorldConfig>>(WORLD_LS_KEYS.config, {}) : {};
+  _configRaw = raw;
   // 与默认值深合并，缺字段用默认补齐（向后兼容新增字段）
   _configCache = {
-    comfyui: { ...DEFAULT_WORLD_CONFIG.comfyui, ...(raw.comfyui || {}) },
-    memory: { ...DEFAULT_WORLD_CONFIG.memory, ...(raw.memory || {}) },
-    imageDesc: { ...DEFAULT_WORLD_CONFIG.imageDesc, ...(raw.imageDesc || {}) },
-    gender: { ...DEFAULT_WORLD_CONFIG.gender, ...(raw.gender || {}) },
-    theme: raw.theme || DEFAULT_WORLD_CONFIG.theme,
-    ballSkin: raw.ballSkin || DEFAULT_WORLD_CONFIG.ballSkin,
-    autoStop: raw.autoStop ?? DEFAULT_WORLD_CONFIG.autoStop,
+    comfyui: { ...DEFAULT_WORLD_CONFIG.comfyui, ...(parsed.comfyui || {}) },
+    memory: { ...DEFAULT_WORLD_CONFIG.memory, ...(parsed.memory || {}) },
+    imageDesc: { ...DEFAULT_WORLD_CONFIG.imageDesc, ...(parsed.imageDesc || {}) },
+    gender: { ...DEFAULT_WORLD_CONFIG.gender, ...(parsed.gender || {}) },
+    theme: parsed.theme || DEFAULT_WORLD_CONFIG.theme,
+    ballSkin: parsed.ballSkin || DEFAULT_WORLD_CONFIG.ballSkin,
+    autoStop: parsed.autoStop ?? DEFAULT_WORLD_CONFIG.autoStop,
   };
   return _configCache;
 }
@@ -153,6 +158,7 @@ export function saveWorldConfig(patch: Partial<WorldConfig>): WorldConfig {
   };
   _configCache = next;
   writeWorldJson(WORLD_LS_KEYS.config, next);
+  _configRaw = localStorage.getItem(WORLD_LS_KEYS.config);
   return next;
 }
 
@@ -197,7 +203,7 @@ export function getWorldApp(id: string): WorldAppDef | undefined {
 // ==================== 整包导出 key 汇总 ====================
 // 返回所有应纳入整包导出的 _th_world_* key（固定 key + 按前缀扫描出的记忆 key）。
 export function getWorldStorageKeys(): string[] {
-  const keys: string[] = [WORLD_LS_KEYS.config, WORLD_LS_KEYS.contacts, WORLD_LS_KEYS.wechat, WORLD_LS_KEYS.evolution, WORLD_LS_KEYS.theater, WORLD_LS_KEYS.forum, WORLD_LS_KEYS.weibo, WORLD_LS_KEYS.tangxin, WORLD_LS_KEYS.mofang, WORLD_LS_KEYS.call, WORLD_LS_KEYS.bili, WORLD_LS_KEYS.red, WORLD_LS_KEYS.cal, WORLD_LS_KEYS.diary, WORLD_LS_KEYS.browser, WORLD_LS_KEYS.taobao, WORLD_LS_KEYS.meituan, WORLD_LS_KEYS.fanfan, WORLD_LS_KEYS.xmly, WORLD_LS_KEYS.prompts, WORLD_LS_KEYS.wbsync, WORLD_LS_KEYS.apiplan, WORLD_LS_KEYS.api, WORLD_LS_KEYS.apiActive, WORLD_LS_KEYS.readcfg, WORLD_LS_KEYS.injectsel, WORLD_LS_KEYS.injectstash, WORLD_LS_KEYS.injectcustom, WORLD_LS_KEYS.memAppCfg, WORLD_LS_KEYS.catwb, WORLD_LS_KEYS.wkb, '_th_world_promptwb_v1', '_th_world_promptflags_v1', '_th_world_qualitycustom_v1', '_th_world_writer_persona_v1', '_th_world_evo_config_v1', '_th_world_clock_v1'];
+  const keys: string[] = [WORLD_LS_KEYS.config, WORLD_LS_KEYS.contacts, WORLD_LS_KEYS.wechat, WORLD_LS_KEYS.evolution, WORLD_LS_KEYS.theater, WORLD_LS_KEYS.forum, WORLD_LS_KEYS.weibo, WORLD_LS_KEYS.tangxin, WORLD_LS_KEYS.mofang, WORLD_LS_KEYS.call, WORLD_LS_KEYS.bili, WORLD_LS_KEYS.red, WORLD_LS_KEYS.cal, WORLD_LS_KEYS.diary, WORLD_LS_KEYS.browser, WORLD_LS_KEYS.taobao, WORLD_LS_KEYS.meituan, WORLD_LS_KEYS.fanfan, WORLD_LS_KEYS.xmly, WORLD_LS_KEYS.places, WORLD_LS_KEYS.prompts, WORLD_LS_KEYS.wbsync, WORLD_LS_KEYS.apiplan, WORLD_LS_KEYS.api, WORLD_LS_KEYS.apiActive, WORLD_LS_KEYS.readcfg, WORLD_LS_KEYS.injectsel, WORLD_LS_KEYS.injectstash, WORLD_LS_KEYS.injectcustom, WORLD_LS_KEYS.memAppCfg, WORLD_LS_KEYS.catwb, WORLD_LS_KEYS.wkb, '_th_world_promptwb_v1', '_th_world_promptflags_v1', '_th_world_qualitycustom_v1', '_th_world_writer_persona_v1', '_th_world_evo_config_v1', '_th_world_clock_v1'];
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);

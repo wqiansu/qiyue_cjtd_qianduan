@@ -1,11 +1,4 @@
-// 世界套件 · 微信（wechat）— 三栏重构（复刻微信 PC 端外观）
-// 布局：[图标轨 rail] [中列 list] [主舞台 stage] [+可选聊天信息抽屉 info]，吃满横版平板宽屏。
-// 复用设计系统（.thw-app + 作用域 token），微信主题在 status-bar.css。
-// 新功能：角色主动找你(铃铛/楼层触发)、关系值(亲密度)影响语气、角色专属称呼/心情、群氛围、
-//   已读回执/撤回可见/朋友圈天数等隐私项、朋友圈熟人圈回响、时间相关注入、API 触发对照图。
-// 图片一律「外框+文字描述」(文生图未接入)；提示词可编辑(world-prompts)；同步走 wbSync/api-plan 控制。
-// 架构：openModal2 仅调一次（reset+revive）；常驻根容器 + (_rail/_stage/_sheet) 状态机，
-//   重渲染只改根容器 innerHTML，事件委托绑根容器；子面板=app 内浮层 sheet，不堆叠 modal。
+// 世界套件 · 微信（wechat）
 // 安全：绝不操作真实酒馆环境（只读诊断）。
 import { esc, qs } from '../../lib/dom-utils';
 import { getRoot } from '../../lib/tavern-api';
@@ -401,13 +394,6 @@ registerInjectPlan({
 });
 
 
-// ============================================================================
-// 微信重构：复刻真实微信 PC 端外观（三栏）。
-//   [图标轨 rail] [中列 list：会话/通讯录/朋友圈入口/设置分类] [主舞台 stage：聊天窗/资料/朋友圈/设置]
-//   可选右侧抽屉 inspector：聊天信息。
-// 架构：openModal2 仅调一次（reset+revive），常驻根容器 + 状态机，事件委托绑根容器；
-//   子面板=app 内浮层 sheet（thw-wx-sheet-mask），不堆叠 modal。
-// ============================================================================
 const RID = 'th-wx-app-root';
 let _busy = false;
 let _opening = false;
@@ -834,7 +820,33 @@ function bubbleInner(m: WxMessage): string {
   const inner = m.inner ? `<div class="thw-wx-inner">${iconHtml('fa-comment-dots')}<span>${esc(m.inner)}</span></div>` : '';
   return `${quote}<div class="thw-wx-text">${esc(m.content).replace(/\n/g, '<br>')}</div>${inner}`;
 }
-function bubbleHtml(chat: WxChat, m: WxMessage, isLastMine: boolean): string {
+// 每次渲染算一次的联系人/我方资料。逐气泡调 contactName/contactAvatar 会把
+// 联系人表与整个 wechat blob 各重解析一遍（N 条消息 ~2N 次全量解析）。
+type StageCtx = {
+  byId: Map<string, WorldContact>;
+  meName: string;
+  meAvatar: string;
+  recallVisible: boolean;
+};
+function stageCtx(): StageCtx {
+  const byId = new Map<string, WorldContact>();
+  for (const c of getContacts()) byId.set(c.id, c);
+  return {
+    byId,
+    meName: userDisplayName(),
+    meAvatar: contactAvatar('me'),
+    recallVisible: getWxSettings().recallVisible === true,
+  };
+}
+function ctxName(cx: StageCtx, id: string): string {
+  return id === 'me' ? cx.meName : (cx.byId.get(id)?.name || '未知');
+}
+function ctxAvatar(cx: StageCtx, id: string, cls = ''): string {
+  if (id === 'me') return cx.meAvatar;
+  const c = cx.byId.get(id);
+  return avatarHtml(c?.name || '?', c?.avatar, cls);
+}
+function bubbleHtml(chat: WxChat, m: WxMessage, isLastMine: boolean, cx: StageCtx): string {
   if (m.kind === 'system') {
     // 系统条按内容分辨「动作事件」（收款/退回/通话/蜜语/拍一拍等），渲染成带图标的清晰胶囊，
     //   一眼看清发生了什么；纯提示（如时间线备注）仍走朴素小字。
@@ -852,10 +864,10 @@ function bubbleHtml(chat: WxChat, m: WxMessage, isLastMine: boolean): string {
   const mine = m.senderId === 'me';
   const side = mine ? 'thw-wx-b-me' : 'thw-wx-b-other';
   if (m.recalled) {
-    const showText = getWxSettings().recallVisible && m.content;
-    return `<div class="thw-wx-brow ${side}"><div class="thw-wx-recalled">${esc(mine ? '你' : contactName(m.senderId))}撤回了一条消息${showText ? `<span class="thw-wx-recalled-peek">（${esc(m.content.slice(0, 40))}）</span>` : ''}</div></div>`;
+    const showText = cx.recallVisible && m.content;
+    return `<div class="thw-wx-brow ${side}"><div class="thw-wx-recalled">${esc(mine ? '你' : ctxName(cx, m.senderId))}撤回了一条消息${showText ? `<span class="thw-wx-recalled-peek">（${esc(m.content.slice(0, 40))}）</span>` : ''}</div></div>`;
   }
-  const nameLine = (chat.kind === 'group' && !mine) ? `<div class="thw-wx-sender">${esc(contactName(m.senderId))}</div>` : '';
+  const nameLine = (chat.kind === 'group' && !mine) ? `<div class="thw-wx-sender">${esc(ctxName(cx, m.senderId))}</div>` : '';
   const ops = `<div class="thw-wx-msgops">
     ${!mine ? `<button data-wx-reroll title="重新生成">${iconHtml('fa-rotate')}</button>` : ''}
     <button data-wx-reply title="引用回复">${iconHtml('fa-reply')}</button>
@@ -868,13 +880,13 @@ function bubbleHtml(chat: WxChat, m: WxMessage, isLastMine: boolean): string {
   const receipt = (mine && isLastMine && chat.kind === 'single' && chat.settings.readReceipt !== false)
     ? `<div class="thw-wx-receipt">已读</div>` : '';
   return `<div class="thw-wx-brow ${side}" data-wx-msg="${esc(m.id)}">
-    ${mine ? '' : `<span class="thw-wx-av-wrap" data-wx-msg-av="${esc(m.senderId)}">${contactAvatar(m.senderId)}</span>`}
+    ${mine ? '' : `<span class="thw-wx-av-wrap" data-wx-msg-av="${esc(m.senderId)}">${ctxAvatar(cx, m.senderId)}</span>`}
     <div class="thw-wx-bwrap">
       ${nameLine}
       <div class="thw-wx-bubble">${bubbleInner(m)}</div>
       ${ops}${receipt}
     </div>
-    ${mine ? contactAvatar('me') : ''}
+    ${mine ? cx.meAvatar : ''}
   </div>`;
 }
 function needTimeDivider(prev: WxMessage | undefined, cur: WxMessage): boolean {
@@ -886,16 +898,17 @@ function chatStageHtml(chatId: string): string {
   const chat = getChat(chatId);
   if (!chat) return `<div class="thw-content thw-wx-stage-empty"><div class="thw-wx-bigempty">${iconHtml('fa-comment-slash')}<div>会话不存在</div></div></div>`;
   const msgs = getMessages(chatId);
+  const cx = stageCtx();
   const lastMineId = [...msgs].reverse().find(m => m.senderId === 'me' && (m.kind === 'text' || m.kind === 'image' || m.kind === 'voice'))?.id;
   const body = msgs.length
-    ? msgs.map((m, i) => (needTimeDivider(msgs[i - 1], m) ? `<div class="thw-wx-timediv"><span>${esc(timeLabel(m.ts))}</span></div>` : '') + bubbleHtml(chat, m, m.id === lastMineId)).join('')
+    ? msgs.map((m, i) => (needTimeDivider(msgs[i - 1], m) ? `<div class="thw-wx-timediv"><span>${esc(timeLabel(m.ts))}</span></div>` : '') + bubbleHtml(chat, m, m.id === lastMineId, cx)).join('')
     : `<div class="thw-empty">${iconHtml('fa-comment-dots')}<div class="thw-empty-t">还没有消息</div><div class="thw-empty-d">打个招呼吧～发出第一条，${esc(chat.name)} 就会像真人一样回你几条消息。</div></div>`;
   const typing = (_busy && _stage.kind === 'chat' && _stage.chatId === chatId)
-    ? `<div class="thw-wx-brow thw-wx-b-other">${contactAvatar(chat.contactIds[0] || '')}<div class="thw-wx-bwrap"><div class="thw-wx-bubble thw-wx-typing"><span></span><span></span><span></span></div></div></div>`
+    ? `<div class="thw-wx-brow thw-wx-b-other">${ctxAvatar(cx, chat.contactIds[0] || '')}<div class="thw-wx-bwrap"><div class="thw-wx-bubble thw-wx-typing"><span></span><span></span><span></span></div></div></div>`
     : '';
   const groupBar = (chat.kind === 'group' && !chat.settings.groupAutoSpeaker) ? `
     <div class="thw-wx-groupbar">指定发言：
-      <select class="thw-select thw-wx-speaker"><option value="">（本轮自动）</option>${chat.contactIds.map(id => `<option value="${esc(contactName(id))}">${esc(contactName(id))}</option>`).join('')}</select>
+      <select class="thw-select thw-wx-speaker"><option value="">（本轮自动）</option>${chat.contactIds.map(id => { const nm = esc(ctxName(cx, id)); return `<option value="${nm}">${nm}</option>`; }).join('')}</select>
     </div>` : '';
   const imgReady = isImageBackendReady();
   const subtitle = chat.kind === 'group' ? `${chat.contactIds.length} 人` : (getWxSettings().affinityAffects ? affinityLabel(chat.affinity).txt : '');
@@ -2245,9 +2258,13 @@ async function smartLoadContacts(): Promise<void> {
       existing.push({ name: c.name } as WorldContact); added++;
     }
     let groupAdded = 0;
+    // 必须在上面的 upsertContact 循环之后重读一次：新联系人的 id 只在落库后才有
+    // （:2266 的 existing 是写入前的快照，push 进去的条目没有 id）。
+    const idByNorm = new Map<string, string>();
+    for (const c of getContacts()) if (!idByNorm.has(norm(c.name))) idByNorm.set(norm(c.name), c.id);
     for (const g of (Array.isArray(data.groups) ? data.groups : [])) {
       if (!g?.name || !Array.isArray(g.members) || !g.members.length) continue;
-      const memberIds = g.members.map((mn: string) => getContacts().find(c => norm(c.name) === norm(mn))?.id).filter(Boolean) as string[];
+      const memberIds = g.members.map((mn: string) => idByNorm.get(norm(mn))).filter(Boolean) as string[];
       if (memberIds.length >= 2) { createChat({ kind: 'group', name: String(g.name).trim(), contactIds: memberIds }); groupAdded++; }
     }
     thToast(`已加载 ${added} 位联系人${groupAdded ? `、${groupAdded} 个群` : ''}`, 'success');

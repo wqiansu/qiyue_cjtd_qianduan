@@ -1,8 +1,3 @@
-// 套件读取管理（read-config.ts）
-// 全局读取管理：所有 app 的「读正文」通用裁剪从这里统一取。
-//   字段收敛为真正被消费的三项：最大读取字数 / 结构标签剔除 / 勾选世界书条目作为全局上下文。
-//   （读不读正文、读几楼由各 app 在自己的 store 里决定，本层只管全局裁剪与全局世界书上下文。）
-// 纯数据层，不碰 DOM。key：_th_world_read_v1。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
 export type ExcludeTag = { head: string; tail: string };  // 头部标签 <XXX> / 尾部标签 </XXX>，连同包裹内容一起从读取正文中剔除

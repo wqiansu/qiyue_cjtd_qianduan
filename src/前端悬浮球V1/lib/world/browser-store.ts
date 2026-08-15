@@ -1,33 +1,26 @@
-// 浏览器（browser）数据层（browser-store.ts）
-// PC 端拟真浏览器：世界资讯首页信息流 + 多源搜索 + 可点开网页正文（AI 总结/追问/论坛盖楼/知识卡实体/加微信联动）
-//   + 网址导航宫格 + 热搜榜 + 收藏书签 + 历史。数据本地 _th_world_browser_v1。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
-// 网页里出现、可「加微信」跨 app 联动的人物。
 export type BrwPerson = { name: string; persona: string; greeting: string; gender?: string };
-// 网页正文里提到、可点开生成知识卡的实体。
 export type BrwEntityRef = { name: string; type: 'person' | 'faction' | 'place' | 'term' };
-// 论坛类网页的楼层回帖（可玩家盖楼）。
 export type BrwReply = { id: string; author: string; content: string; floor: number; likes: number; ts: number; replyTo?: string; isMine?: boolean };
-// 网页打开后衍生的内容（正文 + AI 总结 + 追问问答 + 论坛楼层 + 实体 + 人物）。
 export type BrwPageExtras = {
-  page?: string;                 // AI 生成的网页正文
+  page?: string;
   pageLoaded?: boolean;
-  summary?: string;              // AI 总结
-  qa?: { q: string; a: string }[];// 对网页的追问问答
-  replies?: BrwReply[];          // 论坛盖楼回帖
-  entities?: BrwEntityRef[];     // 正文里提到的可深挖实体
-  people?: BrwPerson[];          // 正文里出现、可加微信的人物
+  summary?: string;
+  qa?: { q: string; a: string }[];
+  replies?: BrwReply[];
+  entities?: BrwEntityRef[];
+  people?: BrwPerson[];
 };
 
 export type BrwResultKind = 'web' | 'ad' | 'phishing' | 'forum' | 'site';
 export type BrwResult = {
   id: string;
-  title: string;            // 结果标题
-  site: string;             // 站点名/来源（如「百科」「论坛」「新闻」「官网」）
-  url: string;              // 拟真 URL 文字
-  snippet: string;          // 摘要
-  kind?: BrwResultKind;     // 结果类型：普通网页/拟真广告/钓鱼站/论坛/站点落地页
+  title: string;
+  site: string;
+  url: string;
+  snippet: string;
+  kind?: BrwResultKind;
   suspicious?: boolean;     // 钓鱼/软文可识破标记（生态浓度高时出现）
 } & BrwPageExtras;
 
@@ -39,34 +32,30 @@ export type BrwSearch = {
   isDirect?: boolean;       // 地址栏直达（非关键词搜索）
 };
 
-// 世界资讯首页信息流条目。
 export type BrwNews = {
   id: string;
   title: string;
-  source: string;           // 来源媒体/站点
+  source: string;
   url: string;
-  category: string;         // 频道：要闻/社会/财经/八卦/科技/本地…
+  category: string;
   snippet: string;
-  hot?: string;             // 热度标签文字（可空）
-  coverDesc?: string;       // 配图中文画面描述（无文生图后端时当缩略图占位）
+  hot?: string;
+  coverDesc?: string;
   ts: number;
 } & BrwPageExtras;
 
-// 知识卡实体（人物/势力/地点/术语百科）。
 export type BrwEntity = {
   id: string;
   name: string;
   type: 'person' | 'faction' | 'place' | 'term';
   summary: string;
   sections: { h: string; t: string }[];
-  related: string[];        // 相关实体名（可继续点开）
+  related: string[];
   ts: number;
 };
 
-// 热搜榜条目。
 export type BrwHot = { rank: number; term: string; heat: string; tag?: string };
 
-// 网址导航宫格站点。
 export type BrwNavSite = { id: string; name: string; url: string; desc?: string; builtin?: boolean; cat?: string; adult?: boolean };
 
 export type BrwBookmark = { id: string; title: string; url: string; query: string; refKind: 'result' | 'news'; refId: string; ts: number };
@@ -82,7 +71,6 @@ type BrwData = {
   settings?: BrowserSettings;
 };
 
-// 浏览器设置（上下文+世界书 / API 利用 / 功能提示词 / 生态浓度 / 网址导航与专属 / 自动触发 / 记忆与数据）。
 export type BrowserSettings = {
   useFloors: boolean;
   floorCount: number;
@@ -90,22 +78,19 @@ export type BrowserSettings = {
   worldbookEntryKeys: string[];
   autoInterval: number;        // 每 N 楼自动刷新资讯，0=关
   lastFloor: number;
-  searchEngine: string;        // 默认搜索引擎名（拟真品牌）
+  searchEngine: string;
   incognito: boolean;          // 隐身模式：不写历史
   memoryEnabled: boolean;
   syncEnabled: boolean;
-  // 生态浓度（通用化注入提示词，不写死）
   ecoActivity: number;         // 信息活跃度（更新频率/信息量）0-100
   ecoControversy: number;      // 舆论争议度（对立/反转/吵架）0-100
   ecoAd: number;               // 广告/软文浓度（拟真广告·软广·钓鱼站）0-100
   ecoRumor: number;            // 小道消息/未证实传闻浓度 0-100
   blockWords: string[];
-  topicPref: string;           // 资讯偏好频道（空=综合）
-  // 生态浓度·成人向（通用化注入，不写死提示词）
-  ecoErotic: number;           // 色情度浓度 0-100（成人站点/内容占比与露骨度）
-  ecoCarnal: number;           // 肉欲度浓度 0-100（肉体肉欲与诱惑表现强度）
-  ecoDaily: number;            // 日常度浓度 0-100（平淡真实日常信息占比）
-  // 网址导航·每站独立引导提示词（按 nav id 索引），玩家可在「网址导航 / 分类管理」改写/清空
+  topicPref: string;
+  ecoErotic: number;           // 色情度浓度 0-100
+  ecoCarnal: number;           // 肉欲度浓度 0-100
+  ecoDaily: number;            // 日常度浓度 0-100
   navPrompts: Record<string, string>;
 };
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
@@ -117,8 +102,6 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   ecoErotic: 45, ecoCarnal: 50, ecoDaily: 55, navPrompts: {},
 };
 
-// 内置网址导航（综合门类，点开＝地址栏直达生成该站落地页；世界相关内容由 AI 按世界观填充）。
-// cat：导航分类（综合 / 日常 / 成人）；adult：成人向站点（R18）。
 export const BRW_DEFAULT_NAVS: BrwNavSite[] = [
   { id: 'nav_baike', name: '百科', url: 'baike.world', desc: '这个世界的百科全书', builtin: true, cat: '综合' },
   { id: 'nav_news', name: '头条新闻', url: 'news.world', desc: '要闻头条聚合', builtin: true, cat: '综合' },
@@ -126,7 +109,6 @@ export const BRW_DEFAULT_NAVS: BrwNavSite[] = [
   { id: 'nav_ask', name: '问答', url: 'ask.world', desc: '有问必答社区', builtin: true, cat: '综合' },
   { id: 'nav_shop', name: '购物', url: 'mall.world', desc: '商品与比价', builtin: true, cat: '综合' },
   { id: 'nav_video', name: '影音', url: 'video.world', desc: '视频与直播', builtin: true, cat: '综合' },
-  // 6 个日常其他网页
   { id: 'nav_mail', name: '邮箱', url: 'mail.world', desc: '收发信件与通知', builtin: true, cat: '日常' },
   { id: 'nav_map', name: '地图', url: 'map.world', desc: '地点导航与周边', builtin: true, cat: '日常' },
   { id: 'nav_weather', name: '天气', url: 'weather.world', desc: '天象与黄历', builtin: true, cat: '日常' },
@@ -142,8 +124,6 @@ export const BRW_DEFAULT_NAVS: BrwNavSite[] = [
   { id: 'nav_r18shop', name: '悦己阁', url: 'yueji.world', desc: '成人好物商城', builtin: true, cat: '成人', adult: true },
 ];
 
-// 每个内置站点的默认引导提示词（注入该站「直达落地页」生成，按 nav id 索引）。
-// 写法：站点定位 + 栏目结构 + 内容口味 + 拟真元素 + 该站特有生态；玩家可在「网址导航 / 分类管理」改写/清空。
 export const BRW_DEFAULT_NAV_PROMPTS: Record<string, string> = {
   nav_baike: '【百科·baike.world】定位：这个世界的百科全书，权威中立的词条聚合。落地页栏目：今日词条/热门条目/分类导航(人物·地理·历史·势力·物产)/随机词条/编辑近况。内容口味：条目式客观陈述，带摘要+分节+相关条目，信息分层、不臆造主角私域。拟真元素：编辑/讨论/引用来源/词条争议标注。生态：严肃考据氛围，偶有编辑战与词条锁定提示。',
   nav_news: '【头条新闻·news.world】定位：要闻头条聚合门户。落地页栏目：头条轮播/要闻/本地/财经/社会/八卦花边/滚动快讯。内容口味：标题党与正经报道并存，按生态争议度调浓淡，配来源媒体名+时间。拟真元素：滚动时间戳、记者署名、相关报道、读者评论入口。生态：热点扎堆、媒体抢发、辟谣与谣言齐飞（按小道消息浓度）。',
@@ -196,7 +176,6 @@ function cleanExtras(r: any): BrwResult {
   };
 }
 
-// ==================== 搜索 ====================
 export function getSearches(): BrwSearch[] { return read().searches.slice().sort((a, b) => b.ts - a.ts); }
 export function getSearch(id: string): BrwSearch | undefined { return read().searches.find(s => s.id === id); }
 
@@ -230,7 +209,6 @@ export function deleteSearch(id: string): void {
   write(d);
 }
 
-// ==================== 资讯首页信息流 ====================
 export function getNews(): BrwNews[] { return (read().news || []).slice().sort((a, b) => b.ts - a.ts); }
 export function getNewsItem(id: string): BrwNews | undefined { return (read().news || []).find(n => n.id === id); }
 export function addNews(list: Partial<BrwNews>[]): BrwNews[] {
@@ -259,7 +237,6 @@ export function patchNews(id: string, patch: Partial<BrwNews>): void {
   write(d);
 }
 
-// ==================== 知识卡实体 ====================
 export function getEntities(): BrwEntity[] { return (read().entities || []).slice().sort((a, b) => b.ts - a.ts); }
 export function getEntityByName(name: string): BrwEntity | undefined { return (read().entities || []).find(e => e.name === name); }
 export function upsertEntity(p: Partial<BrwEntity> & { name: string; type: BrwEntity['type'] }): BrwEntity {
@@ -277,7 +254,6 @@ export function upsertEntity(p: Partial<BrwEntity> & { name: string; type: BrwEn
   return e;
 }
 
-// ==================== 热搜榜 ====================
 export function getHot(): BrwHot[] { return (read().hot || []).slice().sort((a, b) => a.rank - b.rank); }
 export function setHot(list: Partial<BrwHot>[]): void {
   const d = read();
@@ -285,7 +261,6 @@ export function setHot(list: Partial<BrwHot>[]): void {
   write(d);
 }
 
-// ==================== 论坛盖楼回帖 ====================
 export function addReplyToResult(searchId: string, resultId: string, reply: { author: string; content: string; likes?: number; replyTo?: string; isMine?: boolean }): void {
   const d = read();
   const s = d.searches.find(x => x.id === searchId);
@@ -321,7 +296,6 @@ export function appendRepliesToNews(newsId: string, list: { author: string; cont
   write(d);
 }
 
-// ==================== 书签 ====================
 export function getBookmarks(): BrwBookmark[] { return read().bookmarks.slice().sort((a, b) => b.ts - a.ts); }
 export function addBookmark(p: { title: string; url: string; query: string; refKind: 'result' | 'news'; refId: string }): void {
   const d = read();
@@ -336,7 +310,6 @@ export function removeBookmark(id: string): void {
 }
 export function isBookmarked(refId: string): boolean { return read().bookmarks.some(b => b.refId === refId); }
 
-// ==================== 网址导航 ====================
 export function getNavs(): BrwNavSite[] { return (read().navs || []).slice(); }
 export function addNav(p: { name: string; url: string; desc?: string; cat?: string; adult?: boolean }): BrwNavSite {
   const d = read();
@@ -350,14 +323,11 @@ export function removeNav(id: string): void {
   d.navs = d.navs.filter(n => n.id !== id); write(d);
 }
 
-// ==================== 数据 ====================
 export function clearAll(): void { const d = read(); write({ searches: [], bookmarks: [], news: [], entities: [], hot: [], navs: d.navs, settings: d.settings }); }
 
-// ==================== 设置 ====================
 export function getBrowserSettings(): BrowserSettings {
   const d = read();
   const s = { ...DEFAULT_BROWSER_SETTINGS, ...(d.settings || {}) };
-  // navPrompts：为「玩家还没自定义过」的内置站点补默认引导，玩家清空/改写后不回填。
   s.navPrompts = { ...BRW_DEFAULT_NAV_PROMPTS, ...(d.settings?.navPrompts || {}) };
   return s;
 }
@@ -367,7 +337,6 @@ export function updateBrowserSettings(patch: Partial<BrowserSettings>): BrowserS
   write(d);
   return d.settings;
 }
-// 取某站点的引导提示词（玩家自定义优先，回退内置默认）。
 export function getNavPrompt(navId: string): string {
   const s = getBrowserSettings();
   return (s.navPrompts && s.navPrompts[navId]) || BRW_DEFAULT_NAV_PROMPTS[navId] || '';

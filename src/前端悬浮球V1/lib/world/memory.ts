@@ -1,15 +1,3 @@
-// 世界套件·记忆中心引擎（memory.ts）
-// 定位：全套件共享的「记忆设施」。每个 APP 的每条对话线 = 一个独立「会话(session)」，
-//       由 appId 标记归属（微信单聊/群聊/世界演化…），会话索引让记忆中心能枚举 + 按 APP 分组。
-//
-// 四层记忆（由浅到深，token 由大到小）：
-//   1. 待总结缓冲 buffer：最新原始对话，累积到阈值自动触发小结。
-//   2. 短期记忆 shortterm：小结（每 shortThreshold 条对话压一条），保留近期细节。
-//   3. 长期记忆 longterm：大总结（每 longThreshold 条小结再压一条），保留主线。
-//   4. 关键设定 pinned：玩家手动钉住，永不参与压缩，每次注入必带（人物关系/世界观锚点）。
-//
-// 注入上下文 = 关键设定(全) + 长期(全) + 最近 N 条短期 + 最近 N 条原始，控 token。
-// 引擎纯数据 + 注入式 summarize 回调（generate 流由 ai-chat 提供），本文件不直接碰 generate/DOM。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson, getWorldConfig, type MemoryConfig } from './world-store';
 import { registerPromptTemplate, getPromptText } from './world-prompts';
 
@@ -17,12 +5,10 @@ import { registerPromptTemplate, getPromptText } from './world-prompts';
 export type MemRole = 'user' | 'assistant';
 export type RawTurn = { id: string; role: MemRole; content: string; ts: number };
 // 记忆条目统一带 importance（重要性权重 1~3，压缩时高分上浮）+ source（认知边界：亲历/听说/未知）。
-//   兼容：旧数据无此字段时按「中(2) / 亲历」兜底。
 export type MemImportance = 1 | 2 | 3;
 export type MemSource = '亲历' | '听说' | '未知';
 export type ShortSummary = { id: string; text: string; ts: number; sourceCount: number; importance?: MemImportance; source?: MemSource; appId?: string };
 export type LongSummary = { id: string; text: string; ts: number; sourceCount: number; importance?: MemImportance; source?: MemSource; appId?: string };
-// 中期记忆（近期→远期之间的过渡层）
 export type MidSummary = { id: string; text: string; ts: number; sourceCount: number; importance?: MemImportance; source?: MemSource; appId?: string };
 export type PinnedNote = { id: string; text: string; ts: number };
 // 未了之事：结构化开放事项，永不压缩，直到标「已了」。
@@ -50,10 +36,6 @@ export type MemorySession = {
 };
 
 // ==================== 角色记忆池 ====================
-// 定位：以「角色档案 id（通讯录 contactId）」为唯一主键的跨 app 共享记忆体。任何以某角色身份进行的
-//   对话（微信单聊/通话/糖心私聊…），其小结都汇入该角色的池；内容类 app 的轻互动用 noteToPool 直接补记。
-//   池独占 关键设定/长期/短期 三层 + 向上压缩；raw 原话仍留在各自会话的 buffer 里（即时语境不串味）。
-//   角色隔离：一个 contactId 一个池，绝不互串。群聊/演化/小剧场不入池（多角色，避免记串人）。
 export type CharPool = {
   contactId: string;
   name: string;                        // 角色显示名（展示用，随档案刷新）
@@ -383,7 +365,6 @@ export async function runPoolMidCompress(cid: string, summarize: MemSummarizer):
 // 池·中期→远期主线：把 mid 合并进一条 longterm 主线，清空 mid。达阈值自动 + 面板手动均调这里。
 export async function runPoolLongCompress(cid: string, summarize: MemSummarizer): Promise<CharPool | null> {
   const p = getPool(cid); if (!p) return p;
-  // 兼容旧调用：若 mid 为空但 shortterm 有货，先归纳一层再合并（旧「短期→长期」入口不断）。
   if (!p.mid.length && p.shortterm.length) { await runPoolMidCompress(cid, summarize); }
   const p2 = getPool(cid); if (!p2 || !p2.mid.length) return p2;
   const cfg = effectivePoolConfig(p2);
@@ -723,6 +704,11 @@ function turnsToText(turns: RawTurn[]): string {
 // summarize 由上层注入（ai-chat 提供真实 generate；记忆面板可注入轻量 generateRaw 包装）。
 // 分流：若会话绑定了 contactId，则小结成果不落本会话，而是归档进该角色的记忆池
 //   （zero-dup：raw 在 buffer→小结前只此一份，小结后只在池一份）；未绑定则维持会话三层。
+// 手动把 buffer 立即小结（即使未达阈值）
+export async function manualSummarize(id: string, summarize: MemSummarizer): Promise<MemorySession | null> {
+  return runShortSummary(id, summarize);
+}
+
 export async function runShortSummary(id: string, summarize: MemSummarizer): Promise<MemorySession | null> {
   const s = getSession(id); if (!s || !s.buffer.length) return s;
   const cfg = effectiveMemConfig(s);
@@ -764,7 +750,6 @@ export async function runMidCompress(id: string, summarize: MemSummarizer): Prom
 }
 
 // 会话·中期→远期主线：把 mid 合并成一条 long，清空 mid。手动按钮也调这里。
-// 兼容旧入口：mid 空但 short 有货时，先归纳一层再合并。
 export async function runLongCompress(id: string, summarize: MemSummarizer): Promise<MemorySession | null> {
   let s = getSession(id); if (!s) return s;
   if (!s.mid.length && s.shortterm.length) { await runMidCompress(id, summarize); s = getSession(id); }
@@ -780,11 +765,6 @@ export async function runLongCompress(id: string, summarize: MemSummarizer): Pro
   s.mid = [];
   saveSession(s);
   return getSession(id);
-}
-
-// 手动把 buffer 立即小结（即使未达阈值）
-export async function manualSummarize(id: string, summarize: MemSummarizer): Promise<MemorySession | null> {
-  return runShortSummary(id, summarize);
 }
 
 // MEM_CONTEXT_PLACEHOLDER

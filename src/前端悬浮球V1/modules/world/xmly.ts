@@ -1,10 +1,3 @@
-// 世界套件·喜马拉雅（xmly.ts）UI 模块
-// PC 三栏「仙宫版听书电台」，电台暖紫(#a855f7→#c084fc)。**纯音频**：有声书/广播剧/国风/ASMR/电台/知识/夜话。
-//   左栏(thw-xmly-side)：品牌+在听节拍 / 逛(推荐·分类·直播电台·声音榜) / 我的(收听追更·歌单·成长) / 设置。
-//   中栏(thw-xmly-content)：四 tab（推荐瀑布流 / 分类聚合 / 直播电台 / 我听的）+ 分类快筛(顶栏下方) + 覆盖/增量刷新养库。
-//   右栏(thw-xmly-inspector)：专辑详情（封面/单集列表/声控弹幕/操作）或直播间详情——打开时变主阅读区。
-//   底部：常驻播放条(thw-xmly-player)——当前音频/进度/倍速/循环/定时，播放态存 store，切 tab 不中断。
-// 玩家＝纯听众（不开台不录书）。破限进 ordered_prompts[0]；注入走 inject-plan；设置 master-detail 局部刷新；全女性百合。
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { openModal2 } from '../../status-bar-init';
 import { phoneShellHtml, startPhoneClock } from '../../lib/world/phone-shell';

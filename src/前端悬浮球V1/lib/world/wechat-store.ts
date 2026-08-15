@@ -1,9 +1,4 @@
-// 微信数据层（wechat-store）
-// 职责：微信 APP 的纯数据读写，落 _th_world_wechat_v1（单 blob）。不碰 DOM、不碰 generate。
-//   - 会话 Chat：单聊(single)/群聊(group)，关联 contacts.ts 的联系人；每个 Chat 绑一条记忆会话(memory.ts)。
-//   - 消息 Message：文本/图片/表情，发送方=联系人 id 或 'me'。
-//   - 朋友圈 Moment：时间线动态 + 点赞 + 评论。
-//   - 每会话设置 ChatSettings：读正文楼数 / 注入正文开关 / 群聊 AI 自选发言。
+// 微信数据层：纯数据读写，落 _th_world_wechat_v1（单 blob）。不碰 DOM、不碰 generate。
 // 记忆 sessionId 约定：'wx_' + chatId（appId='wechat'），由 wechat.ts 在建会话时 ensureSession。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 

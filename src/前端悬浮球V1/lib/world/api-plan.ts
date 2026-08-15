@@ -1,11 +1,3 @@
-// 各 APP 的 API 利用管理（api-plan.ts）
-// 每个 APP 声明自己「一次生成能产出哪些内容」，玩家可：
-//   - 勾选本次生成要带哪些产出（features），把一次 API 调用的产出最大化（默认全开，省调用）；
-//   - 标记哪些产出「可单独生成」（玩家想单点某项时用）；
-//   - 设置批量额度（如一次推荐生成几条），由各 APP 读取。
-// 设计：各 APP 模块加载时 registerApiPlan() 登记自己的 features + 数量项；玩家覆盖存 _th_world_apiplan_v1。
-//   调用方用 isFeatureOn(appId, featureId) / planCount(appId, key) 读「覆盖优先、默认兜底」。
-// 纯数据层，不碰 DOM。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
 export type ApiFeature = {

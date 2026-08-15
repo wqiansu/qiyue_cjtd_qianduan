@@ -1,13 +1,3 @@
-// ============================================================================
-// world-state-ui.ts — 结构化「世界态」子视图（演化双模式之「世界态」tab）
-//
-// 由 evolution.ts 以「双模式」方式宿主：evolution 在 _mode==='wstate' 时把内层 HTML 全权交给
-// 本模块（wstateInnerHtml），点击/change 先交本模块处理（wstateClick/wstateChange，返回 true 即已处理）。
-// 本模块维护自己的 sheet 状态，处理后由 evolution 统一 render()。
-//
-// 提示词/存储见 world-state-prompts.ts / world-state-store.ts。基调=霜月仙宫日常喜剧，
-// 设定靠绑定世界书供给。地点演化复用 100+ 地点世界书条目。
-// ============================================================================
 import { esc } from '../../lib/dom-utils';
 import { iconHtml } from '../../lib/icons';
 import { thToast, thConfirm, thPrompt } from '../../lib/world/ui-kit';
@@ -32,7 +22,7 @@ import {
 
 const WS_INJECT_ID = 'th_world_wstate';
 
-// 本模块自有 sheet 状态（地点已拆出，此处仅留推演流式）
+// 本模块自有 sheet 状态（仅推演流式）
 type WSheet =
   | { kind: 'streaming' }
   | null;
@@ -241,7 +231,7 @@ export function wstateInnerHtml(): string {
     </span>
   </div>`;
 
-  // 分区筛选（地点已拆出，去掉 place 分区）
+  // 分区筛选
   const SECTIONS: { id: string; label: string; ico: string }[] = [
     { id: 'all', label: '全部', ico: 'fa-layer-group' },
     { id: 'threads', label: '单元剧', ico: 'fa-clapperboard' },
@@ -359,7 +349,7 @@ export function wstateInnerHtml(): string {
   return `<div class="th-ws-outer">${head}<div class="th-ws-single">${dash}</div></div>${wstateSheetHtml()}`;
 }
 // PLACEHOLDER_WS_SHEET
-// ---- Sheet HTML（地点已拆出，仅保留推演流式）----
+// ---- Sheet HTML ----
 function wstateSheetHtml(): string {
   if (!_wsheet) return '';
   let title = ''; let inner = '';
@@ -371,8 +361,7 @@ function wstateSheetHtml(): string {
   </div></div>`;
 }
 
-// 世界态设置面板 —— 供「世界演化 → 设置 → 世界态」内联嵌入（不再走独立 sheet）。
-// 锚点世界书改用内联展开的共享复选器（wbPicker），与演化其它分类一致；地点绑定仍走 sheet。
+// 世界态设置面板 —— 供「世界演化 → 设置 → 世界态」内联嵌入（锚点用内联展开的共享 wbPicker）。
 export function wstateSettingsPanelHtml(): string {
   const cfg = getWStateConfig();
   const presets = (() => { try { return getApiPresetNames(); } catch (e) { void e; return []; } })();
@@ -415,7 +404,7 @@ export function wstateBindSettingsPicker(root: HTMLElement): void {
   if (host) bindWbPicker(host, () => _wsPickSel, (keys) => { _wsPickSel = keys; });
 }
 
-// 由 evolution render() 后调用：世界态视图当前无内嵌复选器（地点已拆出），保留空实现兼容调用点。
+// 由 evolution render() 后调用：当前无内嵌复选器（no-op 兼容）
 export function wstateBindPickers(_root: HTMLElement): void { /* no-op：地点复选已移到 places-ui */ }
 // PLACEHOLDER_WS_HANDLERS
 // 仪表盘「设置」按钮 → 跳到「世界演化 设置 · 世界态」分类（由 evolution 注入回调）
@@ -511,7 +500,7 @@ export function wstateClick(t: HTMLElement): boolean {
     });
     return true;
   }
-  // 世界观锚点改内联展开复选器（在演化设置分类里，不再走 sheet）
+  // 世界观锚点：内联展开复选器
   if (t.closest('[data-ws-anchor-open]')) {
     _wsPickSel = [...(getWStateConfig().globalWbKeys || [])];
     _wsAnchorOpen = true; _requestRender(); return true;
@@ -550,7 +539,6 @@ export function wstateChange(t: HTMLElement): boolean {
     refreshWorldInject();   // 隐藏维度也从注入里剔除
     _requestRender(); return true;
   }
-  // 世界书选择已改为共享复选器 wbPicker（自管展开/勾选/加载），settings/addPlace 不再有级联 select。
   return false;
 }
 
@@ -574,12 +562,7 @@ registerAutoAgent({
   fireNow: () => { void runWorldAdvance(); },
 });
 
-// ============================================================================
-// 世界态注入片段化——玩家可精准勾选注入哪部分世界态，
-// 选「写入输入框」或「写入角色卡世界书」，套统一封套、可编辑，默认全关。
-// 「把世界态注入正文」的单一 toggle（injectOn，走 injectWorldPersistent 持久注入）保留兼容，
-// 但设置面板改为展示这套片段面板（injectPlanPanelHtml('wstate')），与微信/糖心/演化等一致。
-// ============================================================================
+// 世界态注入片段（注入面板可选勾选）
 function segBody(kind: 'all' | 'ambiance' | 'ranking' | 'gossip' | 'threads'): string | null {
   const s = getWorldState();
   if (!s.round && !s.threads.length && !s.digest) return null;

@@ -1,6 +1,3 @@
-// 蜜语数据层（tangxin-store.ts）
-// 直播向社交 APP：世界观角色开直播间，玩家进场互动（弹幕 + 主播 AI 回应）、关注、送礼。
-// 偏沉浸/私密互动玩法（沿用项目无外审基调）。数据纯本地 _th_world_tangxin_v1。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
 // 弹幕/互动消息

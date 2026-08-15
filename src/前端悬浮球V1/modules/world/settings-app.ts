@@ -1,8 +1,3 @@
-// 世界套件 —— 设置 App（settings-app.ts）
-// 桌面图标进入的真·设置 App（三栏 .thw-settings-app2）：
-//   左导航分类（API / 读取 / 通讯录 / 文生图 / 记忆 / 主题 / 数据 / 关于），右主区 + 部分分区带检视/编辑。
-// API 完全独立隔离（保留从状态栏导入）；记忆引擎保留仅入口。
-// 真实感：仿 iOS/macOS「设置」App —— 左侧分组列表、右侧大面板、开关/输入精致、留白舒适。
 import { esc, escAttr, qs, qs2 } from '../../lib/dom-utils';
 import { openModal2 } from '../../status-bar-init';
 import { phoneShellHtml, startPhoneClock, pickImageFile } from '../../lib/world/phone-shell';

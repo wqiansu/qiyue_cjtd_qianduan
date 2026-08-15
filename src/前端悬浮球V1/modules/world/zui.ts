@@ -1,20 +1,3 @@
-// 世界套件 —— 最右（zui.ts）UI 模块
-// PC 三栏「仙宫版最右」，抽象黄(#ffe411→#f59e0b)。匿名短平快多模态搞笑社区，核心灵魂＝神评文化。
-//   左栏(thw-zui-side)：品牌+快乐进度条 / 逛(乐子流·频道·热梗) / 我的(成长·名场面·表情库) / 随机一发 / 发条右 / 设置。
-//   中栏(thw-zui-content)：四 tab（乐子流 / 频道聚合 / 梗百科 / 我的）+ 频道快筛(顶栏下) + 覆盖/增量刷新养库。
-//   右栏(thw-zui-inspector)：帖子详情（正文/画面描述/神评区/盖楼/battle/操作）或热榜默认态。
-// 玩家＝乐子人（发帖围观顶神评接龙）。破限进 ordered_prompts[0]；注入走 inject-plan；设置 master-detail 局部刷新；全女性百合。
-// 关键 CSS 类名（供补样式）：
-//   .thw-zui-app2 .thw-zui-side .thw-zui-brand .thw-zui-happy .thw-zui-happy-bar .thw-zui-nav(.on) .thw-zui-navsec .thw-zui-side-grow
-//   .thw-zui-content .thw-zui-catstrip .thw-zui-catchip(.on/.night) .thw-zui-feed
-//   .thw-zui-pcard(.on/.essence) .thw-zui-pcard-head .thw-zui-pcard-alias .thw-zui-pcard-kind .thw-zui-pcard-body
-//   .thw-zui-img(.emoji/.video/.comic) .thw-zui-img-desc .thw-zui-video-script .thw-zui-godline .thw-zui-god-badge
-//   .thw-zui-pcard-meta .thw-zui-badge(.hot/.essence/.night) .thw-zui-hcard(频道聚合小卡)
-//   .thw-zui-inspector .thw-zui-detail-scroll .thw-zui-detail-ops .thw-zui-post-full .thw-zui-cms
-//   .thw-zui-cm(.god/.fishing/.reply) .thw-zui-cm-head .thw-zui-cm-alias .thw-zui-cm-persona .thw-zui-cm-body .thw-zui-cm-ops .thw-zui-cm-floor
-//   .thw-zui-replies .thw-zui-battle .thw-zui-battle-col .thw-zui-mine .thw-zui-lvcard .thw-zui-lv-bar .thw-zui-badges .thw-zui-badge2
-//   .thw-zui-persona .thw-zui-highlights .thw-zui-hl .thw-zui-emojis .thw-zui-emoji .thw-zui-memecard .thw-zui-meme-term .thw-zui-meme-heat
-//   .thw-zui-ranks .thw-zui-rankcard .thw-zui-rank-row .thw-zui-set-body .thw-zui-set-nav .thw-zui-set-detail .thw-zui-slider(-val) .thw-zui-pl-row
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { openModal2 } from '../../status-bar-init';
 import { phoneShellHtml, startPhoneClock } from '../../lib/world/phone-shell';
@@ -46,7 +29,7 @@ import '../../lib/world/zui-prompts';   // 注册 zui.* 提示词
 import {
   getZuiSettings, updateZuiSettings, ZuiSettings,
   ZUI_CATS, ZUI_RANK_KINDS, getCategories, addCustomCat, deleteCustomCat, getCatPrompt, setCatPrompt, isNightCat,
-  getPosts, getPost, randomPost, addPosts, updatePost, likePost, deletePost, clearAiPosts, ZuiPost, ZuiPostKind,
+  getPosts, getOldestPosts, getPost, randomPost, addPosts, updatePost, likePost, deletePost, clearAiPosts, ZuiPost, ZuiPostKind,
   addComments, likeComment, deleteComment, toggleGod, addReply, clearAiComments, ZuiComment,
   getMemes, addMemes, deleteMeme, clearAiMemes, ZuiMeme,
   getRank, upsertRank,
@@ -87,6 +70,7 @@ let _setCat = 'context';
 let _promptEditId: string | null = null;
 let _lastZuiAuto = 20;         // 记住上次自动间隔，开关重开时复用
 let _battle: { a?: string; b?: string } = {};   // 神评 battle 选中的两条
+let _archae = false;             // 考古模式：最早帖子优先
 
 // 帖子形态元数据
 const KIND_META: Record<ZuiPostKind, { icon: string; label: string }> = {
@@ -444,8 +428,11 @@ function mediaHtml(p: ZuiPost, big: boolean): string {
 function tabTopbar(tab: Tab, showCatStrip: boolean): string {
   const title = TABS.find(t => t.id === tab)?.label || '';
   let ops = '';
+  if (tab === 'feed') {
+    ops = `<button class="thw-btn thw-btn-mini${_archae ? ' on' : ''}" data-zui-archae type="button" title="考古模式：跳过新鲜，最先发帖的老帖排前${_cat ? '（忽略当前频道筛选）' : ''}">${iconHtml('fa-magnifying-glass')} 考古</button>`;
+  }
   if (tab === 'feed' || tab === 'cats') {
-    ops = `<button class="thw-btn thw-btn-mini" data-zui-refresh type="button" ${_busy ? 'disabled' : ''} title="增量铺一批新帖${_cat ? '（' + _cat + '）' : ''}">${_busy ? iconHtml('fa-spinner') : iconHtml('fa-rotate')} 刷新${_cat ? esc(_cat) : ''}</button>
+    ops += `<button class="thw-btn thw-btn-mini" data-zui-refresh type="button" ${_busy ? 'disabled' : ''} title="增量铺一批新帖${_cat ? '（' + _cat + '）' : ''}">${_busy ? iconHtml('fa-spinner') : iconHtml('fa-rotate')} 刷新${_cat ? esc(_cat) : ''}</button>
       <button class="thw-btn thw-btn-mini" data-zui-refresh-ow type="button" ${_busy ? 'disabled' : ''} title="清路人帖后重铺（保留你发的/精华/角色的）">${iconHtml('fa-eraser')} 覆盖刷新</button>`;
   } else if (tab === 'memes') {
     ops = `<button class="thw-btn thw-btn-mini" data-zui-meme-refresh type="button" ${_busy ? 'disabled' : ''} title="造一批本站热梗">${_busy ? iconHtml('fa-spinner') : iconHtml('fa-rotate')} 造梗</button>
@@ -464,7 +451,7 @@ function tabTopbar(tab: Tab, showCatStrip: boolean): string {
 }
 
 function feedTabHtml(): string {
-  const list = getPosts(_cat || undefined);
+  const list = _archae ? getOldestPosts(50) : getPosts(_cat || undefined);
   const cards = list.length ? list.map(postCardHtml).join('')
     : `<div class="thw-empty"><div class="thw-empty-t">${_cat ? '「' + esc(_cat) + '」还没有帖子' : '还没有帖子'}</div><div class="thw-empty-d">点右上「刷新${_cat ? esc(_cat) : ''}」让乐子人们上帖、封神，把社区养起来。</div></div>`;
   return `<div class="thw-content thw-zui-content">${tabTopbar('feed', true)}<div class="thw-content-pad thw-zui-feed">${cards}</div></div>`;
@@ -861,6 +848,13 @@ async function onClick(e: Event): Promise<void> {
   }
   // 发条右
   if (t.closest('[data-zui-post-new]')) { void openComposer(); return; }
+  // 考古模式开关
+  if (t.closest('[data-zui-archae]')) {
+    _archae = !_archae;
+    if (_view.name !== 'tab' || _view.tab !== 'feed') _view = { name: 'tab', tab: 'feed' };
+    thToast(_archae ? '考古模式开启：最早的老帖排在最前' : '考古模式关闭，回到新鲜榜', 'info');
+    render(); return;
+  }
   // 深夜区入口：确保开启并跳到该频道
   if (t.closest('[data-zui-night]')) {
     if (!getZuiSettings().nightChannel) { updateZuiSettings({ nightChannel: true }); thToast('已开启深夜区', 'info'); }

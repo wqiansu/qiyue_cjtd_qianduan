@@ -1,6 +1,3 @@
-// world-state-store.ts — 结构化「世界态」存储。
-// 维护一份「霜月仙宫」全局世界态，由 LLM 每轮（或手动）推演更新，再翻译成散文注入正文。
-// 全部维度以喜剧日常基调建模：无骰子、无严肃终局。
 import { readWorldJson, writeWorldJson, WORLD_LS_KEYS } from './world-store';
 
 // ---- 枚举（全部喜剧日常基调，无严肃终局）----
@@ -176,10 +173,13 @@ export type WStateConfig = {
 export const DEFAULT_WSTATE_CONFIG: WStateConfig = { aiPresetName: '', readFloors: 4, injectOn: false, tonePrompt: '', globalWbKeys: [], autoInterval: 0, lastFloor: 0, hiddenDims: [] };
 const WCFG_KEY = '_th_world_wstate_config_v1';
 let _wcfg: WStateConfig | null = null;
+let _wcfgRaw: string | null = null;
 export function getWStateConfig(): WStateConfig {
-  if (_wcfg) return _wcfg;
-  const raw = readWorldJson<Partial<WStateConfig>>(WCFG_KEY, {});
-  _wcfg = { ...DEFAULT_WSTATE_CONFIG, ...(raw || {}) };
+  const raw = localStorage.getItem(WCFG_KEY);
+  if (_wcfg && raw === _wcfgRaw) return _wcfg;
+  _wcfgRaw = raw;
+  const parsed = readWorldJson<Partial<WStateConfig>>(WCFG_KEY, {});
+  _wcfg = { ...DEFAULT_WSTATE_CONFIG, ...(parsed || {}) };
   if (!Array.isArray(_wcfg.globalWbKeys)) _wcfg.globalWbKeys = [];
   if (!Array.isArray(_wcfg.hiddenDims)) _wcfg.hiddenDims = [];
   return _wcfg;
@@ -187,6 +187,7 @@ export function getWStateConfig(): WStateConfig {
 export function saveWStateConfig(patch: Partial<WStateConfig>): WStateConfig {
   const next = { ...getWStateConfig(), ...patch };
   _wcfg = next; writeWorldJson(WCFG_KEY, next);
+  _wcfgRaw = localStorage.getItem(WCFG_KEY);
   return next;
 }
 
@@ -278,47 +279,31 @@ function normalize(s: any): WorldState {
   return b;
 }
 
+let _wsCache: WorldState | null = null;
+let _wsRaw: string | null = null;
 export function getWorldState(): WorldState {
-  return normalize(readWorldJson<any>(WORLD_LS_KEYS.wstate, null));
+  const raw = localStorage.getItem(WORLD_LS_KEYS.wstate);
+  if (_wsCache && raw === _wsRaw) return _wsCache;
+  _wsRaw = raw;
+  _wsCache = normalize(readWorldJson<any>(WORLD_LS_KEYS.wstate, null));
+  return _wsCache;
 }
 export function saveWorldState(s: WorldState): void {
   s.updatedAt = Date.now();
-  writeWorldJson(WORLD_LS_KEYS.wstate, normalize(s));
+  const n = normalize(s);
+  writeWorldJson(WORLD_LS_KEYS.wstate, n);
+  _wsCache = n; _wsRaw = localStorage.getItem(WORLD_LS_KEYS.wstate);
 }
 export function resetWorldState(): void {
-  writeWorldJson(WORLD_LS_KEYS.wstate, blank());
+  const b = blank();
+  writeWorldJson(WORLD_LS_KEYS.wstate, b);
+  _wsCache = b; _wsRaw = localStorage.getItem(WORLD_LS_KEYS.wstate);
 }
 export function hasWorldState(): boolean {
   const s = getWorldState();
   return !!(s.digest || s.threads.length || s.palaces.length || s.buzz.length || s.rivalries.length || s.season.length || s.places.length || s.ranking || s.variety.length || s.clubs.length || s.calendar);
 }
 
-// ---- 地点管理（玩家手动绑定地点世界书条目）----
-export function addPlace(name: string, wbKey?: string): void {
-  const s = getWorldState();
-  if (s.places.some(p => p.name === name)) { if (wbKey) { s.places = s.places.map(p => p.name === name ? { ...p, wbKey } : p); saveWorldState(s); } return; }
-  s.places = [...s.places, { name, busy: '', mood: '', wbKey }].slice(-CAP.places);
-  saveWorldState(s);
-}
-export function removePlace(name: string): void {
-  const s = getWorldState();
-  s.places = s.places.filter(p => p.name !== name);
-  saveWorldState(s);
-}
-// 六大宫殿实体（左栏固定6）：绑定世界书条目 / 手动补齐。
-export function ensurePalaceEntity(name: PalaceName, wbKey?: string): void {
-  const s = getWorldState();
-  s.palaceEntities ||= [];
-  const hit = s.palaceEntities.find(p => p.name === name);
-  if (hit) { if (wbKey) hit.wbKey = wbKey; saveWorldState(s); return; }
-  s.palaceEntities.push({ name, duty: '', recent: '', mood: '', wbKey });
-  saveWorldState(s);
-}
-export function setPalaceWbKey(name: PalaceName, wbKey: string | undefined): void {
-  const s = getWorldState(); s.palaceEntities ||= [];
-  const hit = s.palaceEntities.find(p => p.name === name);
-  if (hit) { hit.wbKey = wbKey; saveWorldState(s); }
-}
 // 一键铺入六大宫殿骨架（据设定固定 6 宫）
 export function seedPalaceEntities(): void {
   const s = getWorldState(); s.palaceEntities ||= [];
@@ -431,10 +416,6 @@ export function deleteSubRankEntry(rankIdx: number, entryIdx: number): void {
 export function deleteSubRank(rankIdx: number): void {
   const s = getWorldState();
   if (s.subRankings && s.subRankings[rankIdx]) { s.subRankings.splice(rankIdx, 1); saveWorldState(s); }
-}
-/** 编辑六宫实体第 index 条。 */
-export function editPalaceEntity(index: number, patch: Record<string, any>): void {
-  editWsItem('palaceEntities', index, patch);
 }
 /** 编辑声望某轴 / 氛围某维 / digest 等单值字段。 */
 export function editWsScalar(patch: Partial<WorldState>): void {

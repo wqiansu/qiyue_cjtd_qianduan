@@ -1,9 +1,5 @@
-// 前端悬浮球V1。
-// 状态栏以悬浮球+可拖拽缩放窗口形式挂在酒馆主页面上。
-//
-// - 挂载点：window.parent.document.body（脚本.mdc 推荐的"独立组件 - 与酒馆样式隔离"模式）
-// - 样式隔离：Vue <style scoped> + teleportStyle() 将本脚本 iframe 的 <head> 样式复制到主页面 <head>
-// - 数据通道：复用酒馆助手变量 API / MVU API；状态栏内部逻辑由 status-bar-init.ts 提供
+// 前端悬浮球V1：状态栏以悬浮球+可拖拽缩放窗口挂在酒馆主页面 body（parent document）。
+// 脚本运行在后台 iframe 内，故挂载点、样式复制、数据访问都作用于 window.parent（脚本.mdc 的"独立组件"模式）。
 import { createScriptIdDiv, teleportStyle } from '@util/script';
 import { createApp, type App } from 'vue';
 import Shell from './Shell.vue';

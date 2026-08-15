@@ -1,6 +1,3 @@
-// AI 润色/续写
-// 对已存在的 managed 卡片单独调 AI 重写 desc（可选结合最近剧情 + 玩家自定义润色要求）。
-// 命令式 + openModal2 + generateRaw（绕开 RP 预设）。kind 适配：储藏间结构化 JSON 仍保持合法。
 import { esc, escAttr, qs } from '../lib/dom-utils';
 import { openModal2, closeModal2 } from '../status-bar-init';
 import { getRoot } from '../lib/tavern-api';
@@ -11,31 +8,26 @@ import {
   getPersonaList, getActivePersonaId, getAiStyleList, getAiStyleId,
 } from '../lib/ai-summary-store';
 
-// 内置润色提示词（registry 接口预留：未来可经 registerExtra 暴露到提示词编辑面板）
-// 拼接顺序与 AI 总结一致 = 头部人格 + 本系统提示词 + 风格后缀，让卡片润色也跟随玩家选的人格/风格。
 const REFINE_SYSTEM = `你是一名游戏设定润色助手。玩家会给你一张卡片的当前内容、可选的最近剧情、以及润色要求。请据此改写卡片描述。
 【硬性约束】
 1. 只输出改写后的卡片描述正文，不要输出任何解释、寒暄、前后缀，不要用代码块标记包裹。
 2. 若卡片是结构化字段（会以 JSON 给出），请输出同结构的 JSON（字段名不变），仅改写字段值。
 3. 忠于设定，不要凭空捏造与原意冲突的硬事实；润色侧重文风与细节丰富度。`;
 
-// 组装润色系统提示词：人格在前、风格后缀在后（与 ai-summarize.sendOneBucket 同口径）。
-// personaId/styleId 显式指定时覆盖「当前激活设定」；传 undefined 则沿用 getActive*（默认）。
 function resolvePersonaText(personaId?: string): string {
-  if (personaId === undefined) return getActivePersonaText(); // 默认：跟随提示词编辑里的激活人格
-  if (!personaId) return ''; // 显式选「不启用」
+  if (personaId === undefined) return getActivePersonaText();
+  if (!personaId) return '';
   const p = getPersonaList().find(x => x.id === personaId);
   return p ? p.persona + '\n\n' : '';
 }
 function resolveStyleSuffix(styleId?: string): string {
-  if (styleId === undefined) return getAiStyleSuffix(); // 默认：跟随激活风格
+  if (styleId === undefined) return getAiStyleSuffix();
   return getAiStyleList().find(s => s.id === styleId)?.systemSuffix || '';
 }
 function buildRefineSystem(personaId?: string, styleId?: string): string {
   return resolvePersonaText(personaId) + REFINE_SYSTEM + resolveStyleSuffix(styleId);
 }
 
-// 人格/风格下拉（默认选中当前激活项，玩家可临时改本次发送用的设定）。
 function renderPersonaStyleControls(): string {
   const personas = getPersonaList();
   const styles = getAiStyleList();
@@ -52,7 +44,7 @@ function renderPersonaStyleControls(): string {
       <select id="th-aip-style" class="th-edit-select" style="font-size:12px">${styleOpts}</select></label>
   </div>`;
 }
-// 读取下拉当前值（默认 = 与激活一致）
+// 读取下拉当前值（空串 = 与激活一致）
 function readPersonaId(): string { return qs<HTMLSelectElement>('#th-aip-persona')?.value ?? ''; }
 function readStyleId(): string { return qs<HTMLSelectElement>('#th-aip-style')?.value ?? getAiStyleId(); }
 
@@ -88,7 +80,6 @@ function getRecentChatSummary(n = 5): string {
   return '';
 }
 
-// 入口：对某卡片打开润色 modal。onDone 回调用于刷新调用方（写回后重渲染卡片/编辑弹窗）。
 export function openRefineModal(kind: ManagedKind, name: string, onDone?: () => void): void {
   const item = getManagedItems(kind)[name];
   if (!item) { toastr?.warning?.('未找到该卡片'); return; }
@@ -172,9 +163,6 @@ async function runRefine(kind: ManagedKind, name: string, isStash: boolean): Pro
   }
 }
 
-// ==================== AI 重写简介 modal（人格/风格选择 + 额外输出指令）====================
-// 弹 modal：人格/风格下拉（默认跟随提示词编辑里的激活设定）+ 额外输出指令文本框 +
-// 结合最近剧情选项。生成后填回传入的 onResult 回调（managed-modal 用它写回 desc 输入框，不自动保存）。
 const REWRITE_SYSTEM_BASE = '你是一名游戏设定润色助手。请根据玩家给出的卡片名与当前简介，重写出一段简洁、生动、符合游戏设定的中文简介（不超过 80 字）。只输出简介正文，不要加标题、引号、解释或任何多余说明，不要用代码块标记包裹。忠于设定，不编造与原意冲突的硬事实。';
 
 export function openRewriteModal(

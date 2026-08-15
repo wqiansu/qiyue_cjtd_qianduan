@@ -1,25 +1,13 @@
-// 世界演化「内置预设」目录（evolution-presets.ts）
-// 提示词全部为「通用 + 读绑定世界书」：预设不把设定写死进 prompt，
-//   而是声明 wbBind（要自动绑定的世界书条目名），推演时由 buildActorSetting 把该条目的
-//   最新内容注入 system。好处：① 设定改了只改世界书、不动提示词；② 提示词通用、可复用。
-//   每个模块保留自己的「特色聚焦 + 喜剧基调」，但具体事实（六宫职能/角色名/地点细节）一律读世界书。
-//
-// 基调严格对齐《此间天地》世界书：现代仙侠 × 高维仙宫 × 日式校园恋爱喜剧 × 轻松日常单元剧
-//   × 无厘头甜蜜修罗场。全女性百合，修仙降维服务于生活/情趣/笑点；没有阴暗面，冲突当天喜剧收场。
-// 纯数据，不碰 DOM、不碰 generate。
-
 export type WorldPreset = {
-  key: string;        // 唯一标识（presetKey）
-  name: string;       // 线程显示名
-  dimension: string;  // 维度标签
-  group: string;      // 分组（用于主 modal 选择器折叠）
-  wbBind: string[];   // 要自动绑定的世界书条目名（按名匹配，可多个）；设定从这里读，不写进 prompt
-  backdrop: string;   // 兜底用的极简定调（仅在没绑到世界书时用；不再承载具体设定细节）
-  prompt: string;     // 通用提示词（读绑定设定推演；占位 {{dimension}}/{{span}}/{{worldTime}}/{{directionBlock}}/{{backdropBlock}}）
+  key: string;
+  name: string;
+  dimension: string;
+  group: string;
+  wbBind: string[];   // 要自动绑定的世界书条目名（按名匹配，可多个）
+  backdrop: string;
+  prompt: string;
 };
 
-// ============ 共用：世界背景演化提示词骨架（通用·读绑定世界书·喜剧基调） ============
-// focus 只给「这条线聚焦看哪一面」，不写任何具体设定事实——事实全靠绑定的世界书条目供给。
 function worldPromptOf(focus: string): string {
   return '你是霜月仙宫的「后台编年史作者」，专长是让这座活着的女儿国在主角（玩家）的镜头之外，依然热热闹闹地过着自己的日子。\n'
     + '现在把视角从主角身上挪开，推演在没人盯着的这段时间里，这个世界在「{{dimension}}」这一面上发生了什么。\n'
@@ -39,9 +27,6 @@ function worldPromptOf(focus: string): string {
     + '"变量变化":[{"path":"世界变量点路径","value":"新值"}]}。\n'
     + 'events 给 2~5 条；变量变化可选、无则空数组 []。不要输出 JSON 以外的任何文字。';
 }
-// ============ 通用世界背景骨架（不锁基调·适配任意角色卡） ============
-// 与 worldPromptOf 的区别：不写死喜剧/全女/降维基调，基调交给绑定设定 + 本卡既定风格 + 导演指令决定。
-// 面向霜月仙宗以外的卡：换本世界书、换个基调即可复用，无需改提示词。
 function worldPromptGeneric(focus: string): string {
   return '你是这个世界的「后台编年史作者」，专长是让世界在主角（玩家）的镜头之外，依然按自己的逻辑继续运转。\n'
     + '把视角从主角身上挪开，推演在没人盯着的这段时间里，这个世界在「{{dimension}}」这一面上发生了什么。\n'
@@ -61,7 +46,6 @@ function worldPromptGeneric(focus: string): string {
     + 'events 给 2~5 条；变量变化可选、无则空数组 []。不要输出 JSON 以外的任何文字。';
 }
 
-// 通用世界背景线预设：面向任意角色卡。wbBind 留空——由玩家在界面里绑定自己卡的世界书条目。
 const GENERIC_GROUP = '通用世界背景线';
 const GENERIC_PRESETS: WorldPreset[] = [
   { key: 'gen.politics', group: GENERIC_GROUP, name: '天下大势 · 时政格局', dimension: '世界·时政格局', wbBind: [],
@@ -95,8 +79,6 @@ const GENERIC_PRESETS: WorldPreset[] = [
     backdrop: '【极简定调】关注边陲/异域/他乡的风物与动静，具体设定以绑定世界书为准。',
     prompt: worldPromptGeneric('聚焦边陲与异域的动静：不同地域/族群/文化的风物与习俗、边地的往来与摩擦、远方传来的消息与商旅、异乡人的处境，让世界的地理与文化显得辽阔而有层次。') },
 ];
-// PLACEHOLDER_PRESETS
-// ============ 落地预设（绑定《此间天地》世界书条目；prompt 通用、设定靠绑定供给） ============
 export const WORLD_PRESETS: WorldPreset[] = [
   {
     key: 'sxtd.cosmos', group: '世界观·天地灵网', name: '天地灵网 · 社会风向', dimension: '世界·社会风向',
@@ -131,8 +113,6 @@ export function getWorldPreset(key: string): WorldPreset | undefined {
   return WORLD_PRESETS.find(p => p.key === key);
 }
 
-// ============ 地点演化预设（利用 100+ 地点世界书条目；prompt 通用，地点设定靠绑定供给） ============
-// 玩家选一个地点世界书条目 → 自动绑定它 → 用这份通用提示词推演「这个地方最近发生了什么」。
 export function buildPlacePrompt(): string {
   return '你是霜月仙宫的「场所观察者」，专长是让一个具体的地方在主角不在场时，依然有自己的生活气与故事在流动。\n'
     + '请推演「{{name}}」这个地点，在主角没来的这段时间里，发生了哪些日常的人来人往、热闹与变化。\n'
@@ -150,8 +130,6 @@ export function buildPlacePrompt(): string {
     + '"变量变化":[{"path":"地点变量点路径","value":"新值"}]}。\n'
     + 'events 给 1~4 条；变量变化可选、无则空数组 []。不要输出 JSON 以外的任何文字。';
 }
-// PLACEHOLDER_ACTOR_BUILTIN
-// ============ 角色内置提示词（给每个角色一份可勾选的专属推演提示词；通用·读绑定设定） ============
 export function buildActorBuiltinPrompt(name: string): string {
   const n = name || '这个角色';
   return '你是一位顶尖的群像叙事作者，专长是让配角在主角镜头之外，依然过着自己真实的人生。\n'

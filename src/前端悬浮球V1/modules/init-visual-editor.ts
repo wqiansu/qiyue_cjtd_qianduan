@@ -22,6 +22,7 @@ import { getCharWorldbookList } from './managed-modal';
 import { createInitialWorldbookEntry } from './stash-io';
 import { parseLinksGraph } from './links-init';
 import { getManagedItems } from '../lib/managed-store';
+import { thConfirm } from '../lib/world/ui-kit';
 import type { ManagedItemV2 } from '../lib/managed-store';
 
 type VKey = 'location' | 'event' | 'dlc' | 'stash' | 'links';
@@ -576,11 +577,11 @@ async function saveBuffer(buf: VBuffer): Promise<void> {
   // location/event/dlc 才检查关联孤儿
   if (buf.key !== 'stash' && buf.key !== 'links') {
     const orphans = warnOrphanLinks(collected);
-    if (orphans.length && !confirm(`检测到 ${orphans.length} 条关联引用了本地不存在的卡片（前3条：${orphans.slice(0, 3).join('；')}）。\n仍要写回吗？（点「确定」写回，点「取消」回去修正）`)) return;
+    if (orphans.length && !await thConfirm({title:'存在失效关联',message:`检测到 ${orphans.length} 条关联引用了本地不存在的卡片（前3条：${orphans.slice(0, 3).join('；')}）。仍要写回吗？`,confirmText:'仍要写回',cancelText:'回去修正',danger:true})) return;
   }
   if (buf.key === 'links') {
     const orphans = warnOrphanLinks(collected);
-    if (orphans.length && !confirm(`检测到 ${orphans.length} 条关联引用了本地不存在的卡片（前3条：${orphans.slice(0, 3).join('；')}）。\n仍要写回吗？（点「确定」写回，点「取消」回去修正）`)) return;
+    if (orphans.length && !await thConfirm({title:'存在失效关联',message:`检测到 ${orphans.length} 条关联引用了本地不存在的卡片（前3条：${orphans.slice(0, 3).join('；')}）。仍要写回吗？`,confirmText:'仍要写回',cancelText:'回去修正',danger:true})) return;
   }
   const content = serializeBuffer(collected);
   try {

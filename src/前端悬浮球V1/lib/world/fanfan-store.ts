@@ -1,10 +1,3 @@
-// 饭饭（fanfan）数据层（fanfan-store.ts）
-// 仙宫版「大众点评」：探店种草 + 排队打卡 + 榜单口碑 的本地生活社区。与美团(交易)错开——
-//   饭饭 = 去哪吃/好不好吃/别人怎么评（决策 + 内容 + 口碑生态），详情「去美团下单」互链，交易闭环交美团。
-// 四 tab：附近好店 / 口碑榜单 / 探店笔记(社区) / 我的。全女性百合世界观，设定读绑定世界书。
-// 数据纯本地 _th_world_fanfan_v1。
-// 功能字段：食客成长(level/exp/badges/tasteTags)、口碑生态(kind/certified/reply/toxic/queue/heatTrend)、
-//   社交联动(buddies/quests)、仙宫餐饮世界观(wbKey/season/hiddenMenu)。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
 // ==================== 类型 ====================

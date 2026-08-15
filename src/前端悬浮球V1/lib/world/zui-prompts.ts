@@ -1,7 +1,4 @@
-// 世界套件 —— 最右（zui）AI 提示词（zui-prompts.ts）
-// 导演笔记式、高信息密度、全女性百合生态、设定读绑定世界书。仙宫版匿名搞笑 UGC 社区：核心灵魂＝神评文化。
-// 所有提示词共用 ZUI_RULE（生态铁律）；破限置顶；生态浓度/世界信息由调用方填充。
-// 最核心铁律：**神评是灵魂**——帖子只是引子，真正好笑的在评论区；一切多模态用中文画面描述表现。
+// 所有提示词共用 ZUI_RULE（生态铁律）；破限置顶。最核心铁律：神评是灵魂——帖子只是引子，评论区才是重头戏；多模态用中文画面描述表现。
 import { registerPromptTemplate } from './world-prompts';
 import { buildJailbreak } from './prompt-kit';
 

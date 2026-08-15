@@ -1,7 +1,3 @@
-// 初始化管理模块（init-manager）。
-// 把散落各处的初始化数据集中到一个面板统一管：内容看板 + 格式校验 + 健康自检 + 一键备份/恢复/恢复出厂 + 关联读写。
-// 向下兼容：不改现有 [初始·xxx] 条目名、不改现有 localStorage key、不破坏现有函数签名。
-// 命令式 innerHTML + openModal2 + data 属性委托，不引 Vue。
 import {
   INITIAL_ENTRY_NAMES,
   INIT_LS_KEYS,
@@ -26,7 +22,6 @@ import { thChoose } from '../lib/world/ui-kit';
 import { safeGetWorldbook, safeUpdateWorldbookWith } from '../lib/tavern-api';
 import { openModal2, closeModal2, closeAllModal2 } from '../status-bar-init';
 import { getCharWorldbookList } from './managed-modal';
-// 整包导出纳入所有 _th_world_* key（套件配置 + 各 APP 数据 + 记忆动态 key）。
 import { getWorldStorageKeys } from '../lib/world/world-store';
 import {
   validateInitPayload,
@@ -86,8 +81,7 @@ type PanelState = {
   vType: InitPayloadType;              // 校验器类型
 };
 
-// 三层存储模型——实时卡片 ⟷ 初始卡片(中间层) ⟷ 世界书 [初始·xxx]。
-// 看板按 8 行铺开（储藏间 4 子类各一行，落到同一 [初始·储藏间] 条目的不同 group；未分类/自定义不入初始流）。
+// 三层存储模型：实时卡片 ⟷ 初始卡片（中间层） ⟷ 世界书 [初始·xxx]
 type RowKind = InitCardKind | 'links';
 const ROW_ORDER: RowKind[] = ['location', 'event', 'dlc', 'stash-item', 'stash-skill', 'stash-status', 'stash-clothing', 'links'];
 const ROW_LABEL: Record<RowKind, string> = {
@@ -110,8 +104,6 @@ type RowState = {
 };
 
 let st: PanelState = { entries: [], rows: [], vText: '', vType: 'stash' };
-
-// ====================面板入口 ====================
 
 export async function openInitManager(): Promise<void> {
   const entries = await gatherInitState();
@@ -272,7 +264,7 @@ function renderHealthRow(state: EntryState): string {
   const ico = { missing: 'fa-circle-minus', empty: 'fa-circle', 'parse-error': 'fa-circle-exclamation', ok: 'fa-circle-check' }[state.health];
   return `<span class="th-init-health ${cls}"><i class="fa-solid ${ico}"></i> ${esc(state.healthMsg)}</span>`;
 }
-void renderHealthRow; // 保留供未来行内徽章复用；三层看板已不直接调用
+void renderHealthRow; // 三层看板已不直接调用，保留供未来行内徽章复用
 
 // 三层 8 行看板。每行：实时卡片 ⟷ 初始卡片 ⟷ 世界书[初始]，各层独立读写。
 function renderTriLayerDashboard(rows: RowState[]): string {
@@ -805,7 +797,9 @@ const PACK_EXTRA_KEYS = [
   INIT_LS_KEYS.aiPrompts, INIT_LS_KEYS.aiBuiltinOverrides, INIT_LS_KEYS.aiPlans, INIT_LS_KEYS.aiStyle,
   INIT_LS_KEYS.aiStylesCustom, INIT_LS_KEYS.aiStyleOverrides, INIT_LS_KEYS.aiPersonas,
   INIT_LS_KEYS.aiPersonaOverrides, INIT_LS_KEYS.aiPersonaActive, INIT_LS_KEYS.presetenvActive,
+  INIT_LS_KEYS.aiIncrMap, INIT_LS_KEYS.aiIncrEnabled, INIT_LS_KEYS.aiJailbreaks, INIT_LS_KEYS.aiJbOverrides, INIT_LS_KEYS.aiJbActive,
   '_th_init_cards_v1',
+  ...INIT_LS_KEYS.mapKeys,
 ];
 
 async function exportFullPack(): Promise<void> {
@@ -845,7 +839,7 @@ function importFullPack(pack: any): Promise<void> {
           localStorage.setItem(k, typeof data === 'string' ? data : JSON.stringify(data));
         }
         if (pack.initEntries) await restoreInitEntries(pack.initEntries);
-        toastr?.success?.('整包导入完成，正在刷新…');
+        toastr?.success?.('收进手账啦，正在刷新…');
         closeAllModal2();
         void openInitManager();
       } catch (e) { console.warn('[init-manager] importFullPack', e); toastr?.error?.('导入整包失败：' + (e as Error).message); }

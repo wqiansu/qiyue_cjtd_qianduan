@@ -4,7 +4,7 @@
 import { INIT_LS_KEYS, type ManagedKind } from './config';
 import { getManagedItems, addManagedItem, deleteManagedItem, type ManagedItemV2 } from './managed-store';
 
-const LS_SNAPSHOTS = INIT_LS_KEYS.aiSnapshots; // '_th_ai_snapshots_v1'
+const LS_SNAPSHOTS = INIT_LS_KEYS.aiSnapshots;
 const MAX_SNAPSHOTS = 20;
 
 export type AiSnapshotItem = { name: string; oldItem: ManagedItemV2 | null };
@@ -25,7 +25,7 @@ function write(list: AiSnapshot[]): void {
 
 export function getSnapshots(): AiSnapshot[] { return read(); }
 
-// 注入前调用：对将被写入的同名卡片，记录其旧值（不存在记 null）。names 为本次将注入的卡片名。
+// 注入前调用：记录将写入卡片被覆盖前的旧值（不存在记 null）。
 export function pushSnapshot(kind: ManagedKind, names: string[], label: string): void {
   if (!names.length) return;
   const items = getManagedItems(kind);
@@ -38,7 +38,6 @@ export function pushSnapshot(kind: ManagedKind, names: string[], label: string):
   write(list);
 }
 
-// 回滚某条快照：把每个卡片恢复到 oldItem（null=删除）。返回恢复数。
 export function rollbackSnapshot(ts: number): { restored: number; deleted: number } {
   const list = read();
   const snap = list.find(s => s.ts === ts);
@@ -51,7 +50,6 @@ export function rollbackSnapshot(ts: number): { restored: number; deleted: numbe
   return { restored, deleted };
 }
 
-// 删除某条快照
 export function deleteSnapshot(ts: number): void {
   write(read().filter(s => s.ts !== ts));
 }

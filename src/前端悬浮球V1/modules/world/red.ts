@@ -1,11 +1,4 @@
 // 世界套件 —— 小红书（red）模块（red.ts）
-// 三栏 master-detail（.thw-red-*）：左导航(发现/关注/收藏/我的/设置 + 发笔记) /
-//   中内容(双列瀑布流笔记 / 博主主页 / 我的主页) / 右检视(话题热榜 ↔ 笔记详情+评论 ↔ 博主名片).
-// 真实感：仿小红书网页版/App——双列瀑布流封面卡、分类栏、笔记详情(图集+正文+#话题+同款好物卡+评论楼中楼)、
-//   博主主页、关注关系、我发笔记(围观回响)、指定角色开号、催更、薯条投流、商单私信联动微信。
-// 专属玩法：①种草经济(好物卡+收藏灵感板+求链接) ②博主生态分层(素人/达人/商家+软广识别+涨粉掉粉)
-//   ③商单联动(达粉丝阈值收品牌私信→灌微信+薯条投流) ④平台活动(话题挑战冲榜+避雷求助).
-// 提示词信息密度高，每功能独立，玩家可自定义。
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { getRoot } from '../../lib/tavern-api';
 import { openModal2 } from '../../status-bar-init';
@@ -39,7 +32,7 @@ import {
   getNotes, getNote, getCollected, getNotesByAuthor, getMyNotes,
   addNotes, addMyNote, addNoteLikes, deleteNote, toggleCollect, toggleLike, setComments, addComment, appendComments,
   clearAll, clearRecommendNotes,
-  getBlogger, upsertBlogger, toggleFollow, getFollowed, getFollowNotes,
+  getBlogger, getBloggers, upsertBlogger, toggleFollow, getFollowed, getFollowNotes,
   getTopicRanking, getBoards, addBoard, deleteBoard, toggleNoteInBoard,
   getActivities, addActivity, deleteActivity,
   getProfile, updateProfile, addFans, markBrandDealTaken,
@@ -517,7 +510,13 @@ function sidebarHtml(): string {
 }
 
 // ---- 笔记卡（双列瀑布流） ----
-function noteCard(n: RedNote): string {
+// 一格一次 getBlogger 会把整个 red blob 重解析 N 遍，故按名建表一次传下去。
+// 不给 noteCard 加可选参数：调用点全是 list.map(noteCard)，第二参会被 map 的 index 顶掉。
+function noteGrid(list: RedNote[]): string {
+  const byName = new Map(getBloggers().map(b => [b.name, b]));
+  return `<div class="thw-red-grid">${list.map(n => noteCard(n, byName.get(n.author))).join('')}</div>`;
+}
+function noteCard(n: RedNote, b: ReturnType<typeof getBlogger>): string {
   const cover = n.img
     ? `<img src="${escAttr(n.img)}" alt="">`
     : `<span class="thw-red-cover-ph" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:26px 14px;text-align:center;">
@@ -528,7 +527,6 @@ function noteCard(n: RedNote): string {
   if (n.isMine) badges.push(`<span class="thw-red-cbadge thw-red-mine">我的</span>`);
   if (n.isAd) badges.push(`<span class="thw-red-cbadge thw-red-ad">赞助</span>`);
   if (n.activityTag) badges.push(`<span class="thw-red-cbadge thw-red-actb">#${esc(n.activityTag)}</span>`);
-  const b = getBlogger(n.author);
   return `<div class="thw-red-card thw-card-hover thw-rise" data-red-open="${escAttr(n.id)}">
     <div class="thw-red-cover">${cover}
       ${n.imgCount > 1 ? `<span class="thw-red-imgcount">${iconHtml('fa-images')} ${n.imgCount}</span>` : ''}
@@ -566,7 +564,7 @@ function feedHtml(cat: string): string {
   const body = _feedBusy
     ? feedSkeleton()
     : (list.length
-      ? `<div class="thw-red-grid">${list.map(noteCard).join('')}</div>`
+      ? noteGrid(list)
       : emptyBlock(_searchQ ? `没搜到「${_searchQ}」相关笔记，换个词或点刷新让世界里的人发一批。` : '点「刷新」让世界里的人发一批笔记。'));
   return `<div class="thw-content">
     <div class="thw-topbar">
@@ -587,7 +585,7 @@ function followHtml(): string {
   const followed = getFollowed();
   return `<div class="thw-content">
     <div class="thw-topbar"><span class="thw-eyebrow">${iconHtml('fa-heart')} 关注</span><span class="thw-topbar-spacer"></span><span class="thw-red-subnote">${followed.length} 位博主</span></div>
-    <div class="thw-content-pad thw-red-feed">${list.length ? `<div class="thw-red-grid">${list.map(noteCard).join('')}</div>` : emptyBlock('你还没关注博主。点开笔记里的博主名片关注 TA，TA 的新笔记会出现在这里。')}</div>
+    <div class="thw-content-pad thw-red-feed">${list.length ? noteGrid(list) : emptyBlock('你还没关注博主。点开笔记里的博主名片关注 TA，TA 的新笔记会出现在这里。')}</div>
   </div>`;
 }
 
@@ -603,7 +601,7 @@ function collectHtml(): string {
       return `<div class="thw-red-board">
         <div class="thw-red-board-head"><span class="thw-sec-title">${iconHtml('fa-bag-shopping')} ${esc(bd.name)} <span class="thw-tag">${notes.length}</span></span>
           <button class="thw-iconbtn thw-iconbtn-danger" data-red-board-del="${escAttr(bd.id)}" title="删除灵感板">${iconHtml('fa-trash')}</button></div>
-        ${notes.length ? `<div class="thw-red-grid">${notes.map(noteCard).join('')}</div>` : `<div class="thw-empty-d" style="padding:8px 2px">空板子——在笔记详情里点「收藏到灵感板」往这里收。</div>`}
+        ${notes.length ? noteGrid(notes) : `<div class="thw-empty-d" style="padding:8px 2px">空板子——在笔记详情里点「收藏到灵感板」往这里收。</div>`}
       </div>`;
     }).join('')
     : '';
@@ -613,7 +611,7 @@ function collectHtml(): string {
     <div class="thw-content-pad">
       ${boardBlock}
       <div class="thw-sec-title" style="margin-top:4px">${iconHtml('fa-bookmark')} 全部收藏 ${collected.length}</div>
-      ${collected.length ? `<div class="thw-red-grid">${collected.map(noteCard).join('')}</div>` : emptyBlock('在笔记详情里点收藏，会出现在这里；还能归类到灵感板。')}
+      ${collected.length ? noteGrid(collected) : emptyBlock('在笔记详情里点收藏，会出现在这里；还能归类到灵感板。')}
     </div>
   </div>`;
 }
@@ -654,7 +652,7 @@ function meHtml(): string {
         <button class="thw-red-folunfol" data-red-follow="${escAttr(b.name)}" type="button" title="取消关注">${iconHtml('fa-xmark')}</button>
       </div>`).join('')}</div>` : emptyBlock('你还没关注任何博主。')}
       <div class="thw-sec-title" style="margin-top:6px">${iconHtml('fa-book-open')} 我的笔记 ${mine.length}</div>
-      ${mine.length ? `<div class="thw-red-grid">${mine.map(noteCard).join('')}</div>` : emptyBlock('点右上「发笔记」发布你的第一篇，世界会来围观、点赞、涨粉。')}
+      ${mine.length ? noteGrid(mine) : emptyBlock('点右上「发笔记」发布你的第一篇，世界会来围观、点赞、涨粉。')}
     </div>
   </div>`;
 }
@@ -686,7 +684,7 @@ function bloggerHtml(name: string): string {
         </div>
       </div>
       <div class="thw-sec-title" style="margin-top:6px">${iconHtml('fa-book-open')} TA 的笔记 ${notes.length}</div>
-      ${notes.length ? `<div class="thw-red-grid">${notes.map(noteCard).join('')}</div>` : emptyBlock('TA 还没有公开的笔记。')}
+      ${notes.length ? noteGrid(notes) : emptyBlock('TA 还没有公开的笔记。')}
     </div>
   </div>`;
 }

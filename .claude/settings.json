@@ -212,7 +212,20 @@
       "Read(//c/Users/Administrator/AppData/Local/Temp/chrome-devtools-mcp-qiUcSe/**)",
       "Read(//c/Users/Administrator/AppData/Local/Temp/chrome-devtools-mcp-DvrSjg/**)",
       "Bash(node tmp/render.mjs tmp/op1.json)",
-      "Bash(python -X utf8 tmp/simp_src.py 28 29 30)"
+      "Bash(python -X utf8 tmp/simp_src.py 28 29 30)",
+      "mcp__chrome-devtools__resize_page",
+      "Read(//c/Users/Administrator/AppData/Local/Temp/chrome-devtools-mcp-WEMb0j/**)",
+      "Bash(grep -n \"_DEAD_\\\\|^];\\\\|秘境泛区补一群小点\\\\|^var EDGES = \\\\[$\\\\|^var CUR = \\\\|小工具\" src/前端悬浮球V1/地图原型.html)",
+      "mcp__chrome-devtools__emulate",
+      "WebFetch(domain:hamstersgaming.itch.io)",
+      "WebFetch(domain:github.com)",
+      "Bash(ls -a \"c:/cursor/ewai/tavern_helper_template-main/.claude\" 2>/dev/null; echo \"---user skills---\"; ls -a \"C:/Users/Administrator/.claude/skills\" 2>/dev/null | head -30)",
+      "Read(//c/Users/Administrator/.claude/skills/**)",
+      "Read(//c/Users/Administrator/.claude/**)",
+      "Read(//c/Users/Administrator/.claude/plugins/**)",
+      "Bash(cd \"C:/Users/Administrator/.claude/plugins\" && echo \"=== installed_plugins.json ===\" && cat installed_plugins.json && echo && echo \"=== known_marketplaces.json ===\" && cat known_marketplaces.json && echo && echo \"=== marketplaces dir ===\" && ls -a marketplaces)",
+      "Bash(claude --version)",
+      "Bash(claude plugin *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Administrator\\.claude\\projects\\c--cursor-ewai-tavern-helper-template-main"

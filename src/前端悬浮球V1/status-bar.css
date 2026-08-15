@@ -41,6 +41,14 @@
   --game-gold: #d4a574; --game-gold-light: #f0d4a8; --game-gold-pale: #fff8f0;
   --game-rose: #f080a0; --game-rose-light: #f5a0c0;
   --border-game: linear-gradient(135deg, var(--game-gold-light), var(--pink2), var(--game-gold-light));
+  /* 美化 §5.1 锁死配方,stops / 高光位置 / 透明度不许改 */
+  --metal-line: linear-gradient(135deg,#f0d4a8,#d4a574 50%,#f0d4a8);
+  --enamel-hi: radial-gradient(circle at 30% 28%,rgba(255,255,255,.95),rgba(255,255,255,0) 42%);
+  --enamel-edge: inset 0 -3px 6px rgba(0,0,0,.14), inset 0 1px 1px rgba(255,255,255,.7);
+  --glaze-band: linear-gradient(115deg,transparent 42%,rgba(255,255,255,.38) 50%,transparent 58%);
+  --seal-red: #d9534a;
+  /* 全库唯一一张噪点,opacity 由使用处给;地图侧靠继承拿同一张 */
+  --thm-noise:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
   --r: 20px; --rs: 14px; --rx: 10px; --rl: 24px; --rp: 32px;
   /* §10.8 P9:圆角语义映射 — 卡=rl / 按钮=rs / 小按钮·输入=rx。
      不替换 --r/--rs/--rx/--rl,只补语义别名,让按钮/输入引用对应 token,
@@ -237,14 +245,9 @@
 
 /* ===== 全局动画 ===== */
 @keyframes fade-in { from{opacity:0} to{opacity:1} }
-@keyframes fade-in-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
 @keyframes phoneSlideIn { from{opacity:0;transform:scale(0.94) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
 @keyframes modal-pop { from{opacity:0;transform:scale(0.92) translateY(16px)} to{opacity:1;transform:scale(1) translateY(0)} }
 @keyframes tip-in { from{opacity:0} to{opacity:1} }
-@keyframes shimmer {
-  0%{background-position:-200% 0}
-  100%{background-position:200% 0}
-}
 @keyframes float {
   0%,100%{transform:translateY(0)}
   50%{transform:translateY(-3px)}
@@ -254,13 +257,10 @@
   70%{box-shadow:0 0 0 8px rgba(255,107,157,0)}
   100%{box-shadow:0 0 0 0 rgba(255,107,157,0)}
 }
+/* 走 transform 不走 left(§7.2b:非合成属性不许常驻;这条挂在每根属性条与 NPC 指标条上) */
 @keyframes bar-shine {
-  0%{left:-100%}
-  100%{left:200%}
-}
-@keyframes star-twinkle {
-  0%,100%{opacity:1;transform:scale(1)}
-  50%{opacity:0.6;transform:scale(0.85)}
+  0%{transform:translateX(-250%)}
+  100%{transform:translateX(500%)}
 }
 
 /* ===== 折叠状态 ===== */
@@ -272,6 +272,15 @@
 .th-main-wrap::-webkit-scrollbar { width: 5px; }
 .th-main-wrap::-webkit-scrollbar-track { background: transparent; }
 .th-main-wrap::-webkit-scrollbar-thumb { background: rgba(180,160,195,0.3); border-radius: 3px; }
+/* 纸角萌物:简笔画贴卡片角落,z-index 压过卡片;pointer-events 全关不挡点击 */
+.th-doodles{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden;color:var(--pink3);}
+.thd{position:absolute;height:auto;}
+.thd-cat{left:286px;top:250px;width:96px;color:var(--rose);opacity:.9;}
+/* text 继承了 svg 上的 fill:none,必须自己填色描边才看得见 */
+.thd-z{font-family:var(--font-label);font-size:8px;font-weight:800;fill:currentColor;stroke:none;}
+.thd-face{stroke-width:1;}
+.thd-cloud{left:auto;right:26px;top:470px;width:78px;color:var(--lav);opacity:.85;}
+.thd-star{left:auto;right:30px;top:1015px;width:40px;color:var(--game-gold);opacity:.9;transform:rotate(-10deg);}
 
 /* ===== 标题栏 — 游戏HUD风格 ===== */
 .th-topbar {
@@ -658,7 +667,6 @@
     inset 0 0 12px rgba(255,255,255,0.3);
   position: relative;
 }
-/* §10.6 P1：头像 conic 渐变环保留；永久旋转改呼吸光晕（hover 环亮 + sparkle 闪现） */
 .th-avatar-ring::before {
   content: '';
   position: absolute; inset: -6px; border-radius: 50%;
@@ -666,21 +674,7 @@
   pointer-events: none;
   opacity: 0.6; transition: opacity 0.35s;
 }
-.th-avatar-ring::after {
-  content: '';
-  position: absolute; inset: -2px; border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent 70%, rgba(255,255,255,0.65) 88%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.3s;
-  pointer-events: none;
-}
 .th-avatar-upload:hover .th-avatar-ring::before { opacity: 1; }
-.th-avatar-upload:hover .th-avatar-ring::after { opacity: 1; animation: avatar-sparkle 1.6s ease-in-out infinite; }
-@keyframes avatar-sparkle {
-  0%, 100% { transform: rotate(0deg); }
-  50%      { transform: rotate(180deg); }
-}
-@keyframes rotate { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 .th-avatar-img-wrap {
   width:100%;height:100%;border-radius:50%;overflow:hidden;
   background:linear-gradient(135deg,#fdf2f8,#f5edfa);
@@ -705,7 +699,7 @@
 .th-avatar-btn:hover { background:linear-gradient(135deg,var(--pink3),var(--lav3));color:var(--pink);border-color:var(--pink2);transform:translateY(-2px);box-shadow:0 4px 10px rgba(255,107,157,0.15); }
 .th-avatar-btn-delete:hover { background:linear-gradient(135deg,#ffe0e0,#ffd0d0);color:#ff4757;border-color:rgba(255,71,87,0.3); }
 
-.th-user-hero-info { flex:1;min-width:0; }
+.th-user-hero-info { flex:1;min-width:0; display:flex; flex-direction:column; align-self:stretch; justify-content:flex-start; }
 .th-user-name-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
 .th-user-name-display {
   font-size:24px;font-weight:900;letter-spacing:1px;
@@ -728,6 +722,13 @@
 .th-money-display { display:flex;align-items:center;gap:6px;font-size:14px;font-weight:900;color:var(--accent-gold); }
 .th-money-icon { font-size:13px; filter: drop-shadow(0 1px 2px rgba(245,158,11,0.3)); }
 .th-location-text { font-size:14px;color:var(--accent-blue);margin-top:6px;font-weight:700;display:flex;align-items:center;gap:6px; opacity: 0.9; }
+/* 主角右侧重排：行1 金钱左+属性右上 / 行2 地点 / 行3,4 背包·技能 竖排 */
+.th-hero-toprow { display:flex;align-items:flex-start;gap:10px; }
+.th-user-hero .th-money-row { margin-top:0; }
+/* display 必须显式写 flex,窄屏 media query 把 .th-mini-actions 改成了 grid 双列 */
+.th-user-hero .th-mini-actions { display:flex; flex-direction:column; align-items:stretch; gap:8px; margin-top:10px; }
+.th-user-hero .th-mini-actions .th-mini-btn { width:100%; justify-content:center; }
+.th-user-hero .th-money-display { font-size:17px; }
 /* 需求1：迷你背包/技能按钮 */
 
 /* ===== 姿态/身体 并排按钮 — 需求6：甜蜜可爱糖果色 ===== */
@@ -942,41 +943,9 @@
 }
 .th-hover-tip-title { font-weight:900;font-size:16px;margin-bottom:6px;color:var(--accent-pink); }
 .th-hover-tip-row { display:flex;align-items:center;gap:6px;margin:3px 0; }
-/* ===== 需求1修订：NPC 轮盘（头像hover — 阶梯式纵向堆叠） ===== */
-.th-npc-metric-wheel {
-  position:fixed;z-index:var(--z-tip);pointer-events:none;
-}
-.th-wheel-item-cascade {
-  position:fixed;z-index:var(--z-tip);pointer-events:none;
-  display:flex;align-items:center;gap:6px;
-  padding:5px 10px;background:rgba(30,22,48,0.94);
-  border:1px solid rgba(160,140,200,0.3);
-  border-radius:6px;font-size:11px;color:#f0e8f8;
-  white-space:nowrap;box-shadow:0 3px 14px rgba(0,0,0,0.45);
-}
-.th-wheel-label-cascade { font-size:10px;min-width:34px;color:#c8b8e0;font-weight:700; }
-.th-wheel-bar-cascade { width:48px;height:4px;border-radius:2px;background:rgba(255,255,255,0.15);overflow:hidden; }
-.th-wheel-fill-cascade { height:100%;border-radius:2px; transition: width 0.6s; position: relative; overflow: hidden; }
-.th-wheel-fill-cascade::after { /* 批次8：滚动高光（跟 .th-attr-bar-fill / .th-npc-metric-fill 模式一致） */
-  content: '';
-  position: absolute; top: 0; left: -100%; width: 40%; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
-  animation: bar-shine 3s infinite;
-}
-.th-wheel-fill-cascade.heart{background:linear-gradient(90deg,#e8547e,#f5a0b8)}
-.th-wheel-fill-cascade.lust{background:linear-gradient(90deg,#e05080,#f0a0c0)}
-.th-wheel-fill-cascade.excite{background:linear-gradient(90deg,#e89840,#f5c898)}
-.th-wheel-fill-cascade.sense{background:linear-gradient(90deg,#a050d0,#c8a0e8)}
-.th-wheel-fill-cascade.shame{background:linear-gradient(90deg,#6078d0,#b8c8f0)}
-.th-wheel-val-cascade { min-width:20px;text-align:right;font-weight:900;color:#f0e8f8;font-size:11px; }
-
 /* ===== 迷你背包/技能按钮 — 游戏道具栏风格 ===== */
-/* ⚠️ 胶囊宽度是硬约束：user 卡右栏只有 ~186px，两枚胶囊 + gap 必须挤进去。
-   横向 padding/gap 给大了（原来 18px）→ 胶囊被 flex 压缩到小于内容宽
-   → 数字被 overflow:hidden + border-radius:20px 的圆角切掉（实测溢出右边界 2.8px）。
-   实测取值：padding 7px + 内部 gap 5px + 数字块 padding 5px 时，
-   一位数需 166.6px / 两位数 172.8px / 三位数 183.6px，均 < 186px 可单行放下。
-   再给 .th-mini-actions 开 flex-wrap 兜底：四位数以上整行换行，而不是继续压缩把数字切没。 */
+/* ⚠️ 横向 padding/gap 是硬约束:user 卡右栏仅 ~186px,给大了胶囊会被 flex 压到内容宽以下,
+   数字被 border-radius 的圆角连同 overflow:hidden 切掉。flex-wrap 是位数超预期时的兜底。 */
 .th-mini-actions { display:flex;gap:4px;margin-top:8px;flex-wrap:wrap; }
 .th-mini-btn {
   display:inline-flex;align-items:center;gap:5px;flex-direction:row;
@@ -1393,6 +1362,28 @@
 .th-modal-section:last-child { margin-bottom:0; }
 .th-modal-label { font-size:14px;font-weight:800;color:var(--accent-lav);margin-bottom:6px;display:flex;align-items:center;gap:7px; }
 .th-modal-text { font-size:15px;color:var(--tx);line-height:1.6; }
+/* 琉璃心事便签:内心想法/本能渴望专用,只换外壳不动字段编辑 */
+.th-modal-section.th-mind-note {
+  position: relative;
+  padding: 13px 14px 12px;
+  border-radius: 12px;
+  background:
+    linear-gradient(150deg, rgba(255,255,255,.92), rgba(250,243,255,.72)),
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(200,180,230,.16) 23px 24px);
+  border: 1.5px solid rgba(255,180,210,.38);
+  box-shadow: var(--sh-1), inset 0 1px 0 rgba(255,255,255,.85);
+}
+.th-modal-section.th-mind-note::before {
+  content: '';
+  position: absolute; top: -5px; left: 50%; transform: translateX(-50%);
+  width: 52px; height: 13px;
+  background: linear-gradient(90deg, rgba(212,165,116,.5), rgba(240,212,168,.85), rgba(212,165,116,.5));
+  border-radius: 2px; opacity: .9;
+  box-shadow: 0 1px 2px rgba(160,100,80,.18);
+}
+.th-modal-section.th-mind-note .th-modal-label { color: var(--pink2); }
+.th-modal-section.th-mind-note .th-modal-label i { font-size: 13px; }
+.th-modal-section.th-mind-note .th-modal-text { font-size: 15px; line-height: 1.75; color: var(--tx); }
 .th-modal-counts { display:flex;gap:24px;font-size:15px;color:var(--tx2);margin-bottom:14px;font-weight:600; }
 .th-modal-counts b { color:var(--tx); }
 /* §10.11 ⑤:计数归入数值指标 section 内时,收紧上边距(紧跟 metrics 网格) */
@@ -1491,7 +1482,7 @@
 .th-attr-bar-fill { height:100%;border-radius:5px;transition:width 0.8s var(--ease-smooth);position:relative; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 0 6px rgba(255,107,157,0.25); z-index: 2; }
 .th-attr-bar-fill::after {
   content: '';
-  position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+  position: absolute; top: 0; left: 0; width: 50%; height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
   animation: bar-shine 2.5s infinite;
 }
@@ -1517,7 +1508,7 @@
 .th-npc-metric-fill { height:100%;border-radius:4px;transition:width 0.6s; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 0 5px rgba(255,107,157,0.2); position: relative; overflow: hidden; z-index: 2; }
 .th-npc-metric-fill::after {
   content: '';
-  position: absolute; top: 0; left: -100%; width: 40%; height: 100%;
+  position: absolute; top: 0; left: 0; width: 40%; height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
   animation: bar-shine 3s infinite;
 }
@@ -1787,18 +1778,56 @@ select.th-edit-select:focus {
 .th-status-wrapper * { scrollbar-width: thin; scrollbar-color: var(--pink2) transparent; }
 
 /* ===== 需求1：地点总览弹窗 ===== */
+/* ---- 美化 §7.2 C6 琉璃放大镜搜索:壳承载材质,input 只管文字 ---- */
+.th-mgsearch{
+  position:relative; display:flex; align-items:center; gap:9px;
+  margin-bottom:12px; padding:0 13px 0 11px;
+  border:1.5px solid var(--dv2); border-radius:var(--r-btn-sm);
+  background:linear-gradient(150deg,rgba(255,255,255,.92),var(--bg2));
+  box-shadow:var(--sh-1), inset 0 1px 1px rgba(255,255,255,.85);
+  transition:border-color .25s, box-shadow .25s;
+}
+/* §5.1 琉璃斜切高光带。z 必须 0:压在 input 文字之下,盖上去会把字洗白 */
+.th-mgsearch::after{
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+  border-radius:inherit; background:var(--glaze-band); opacity:.55;
+}
+.th-mgsearch:focus-within{ border-color:var(--pink2); box-shadow:var(--sh-2), inset 0 1px 1px rgba(255,255,255,.85); }
+/* 12+18:补掉吸顶缎带的 -18px 上提量。⚠ 储藏间「全部」tab 无缎带,故挂 :has 不写死 */
+.th-mgsearch:has(+ .th-tag-filter-bar){ margin-bottom:30px; }
+/* 珐琅放大镜钮(§5.1) */
+.th-mgsearch-ico{
+  position:relative; z-index:1; flex:0 0 auto;
+  width:26px; height:26px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background-image:radial-gradient(circle at 50% 60%,var(--pink2),var(--pink)), var(--enamel-hi);
+  box-shadow:var(--enamel-edge);
+  /* ⚠ 图标尺寸走 font-size:`.th-ico` 是 1em 见方,width 会被 `.th-status-wrapper .th-ico` 压掉 */
+  font-size:13px;
+  color:#fff;
+}
 /* 与 .th-npc-search 同源:酒馆全局 `input[type="text"] { background-color: var(--ui-color-sec) !important; }` 长形式会覆盖简写 `background`。
    改 type="search" 绕开酒馆匹配 + transparent bg + appearance:none + color-scheme:light,详见 .th-npc-search 注释 L352-355。*/
 .th-location-search {
-  width:100%;padding:10px 14px;border:2px solid var(--dv2);border-radius:10px;
+  position:relative; z-index:1;
+  flex:1 1 auto; min-width:0;
+  width:100%;padding:10px 0;border:0;border-radius:0;
   font-size:15px;font-family:inherit;color:var(--tx);
   background: transparent; background-color: transparent; background-image: none;
-  margin-bottom:12px;outline:none;transition:border-color 0.25s;
+  outline:none;
   -webkit-appearance: none; -moz-appearance: none; appearance: none;
   caret-color: var(--pink); color-scheme: light;
 }
-.th-location-search:focus { border-color:var(--pink2); }
 .th-location-search::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+/* ⚠ §10.5 兜底是 (0,3,0) + !important(`:where()` 不计,两个 `:not()` 各计一个)
+   ⇒ 压它必须凑三个类级,`:not(.th-switch)` 是第三个。 */
+.th-mgsearch input.th-location-search:not(.th-switch) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
 .th-location-grid {
   display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
   max-height:55vh;overflow-y:auto;padding-right:4px;
@@ -1821,22 +1850,28 @@ select.th-edit-select:focus {
 .th-location-card:active {
   transform:none;box-shadow:none;
 }
-.th-managed-card.enabled {
-  border-color:rgba(255,160,210,0.82);
-  background:linear-gradient(135deg,rgba(255,226,242,0.95),rgba(232,220,255,0.95),rgba(214,248,255,0.9));
-  background-size:220% 220%;
-  animation:managed-card-glow 4s ease-in-out infinite;
-  box-shadow:0 6px 22px rgba(255,116,170,0.22),0 0 18px rgba(120,210,240,0.16);
+/* ===== §11.7 C1 卡面 =====
+   边框/底/光晕取主 modal `.th-npc-card` 的同一组值 —— 三弹窗与主面板共用一套卡片语言。 */
+.th-location-card.th-managed-card {
+  border:1.5px solid rgba(255,180,210,0.35);
+  border-radius:var(--r-card);
+  background:linear-gradient(135deg,rgba(255,250,252,0.88),rgba(250,245,255,0.82));
+  box-shadow:var(--sh-1),0 0 16px rgba(255,180,210,0.06);
+  isolation:isolate;  /* 关住 ::before 的 multiply,否则它去乘背后的面板 */
 }
-.th-managed-card.enabled:hover {
-  border-color:var(--sky2);
-  box-shadow:0 8px 28px rgba(255,116,170,0.28),0 0 22px rgba(120,210,240,0.22);
+/* §5 水彩晕染 */
+.th-location-card.th-managed-card::before {
+  content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;
+  background-image:var(--thm-noise);background-repeat:repeat;
+  opacity:0.06;mix-blend-mode:multiply;
 }
-.th-bind-dot {
-  width:8px;height:8px;border-radius:50%;flex:0 0 auto;
-  background:#aeb4bd;box-shadow:0 0 0 2px rgba(160,160,170,0.12);
+/* ⚠ 伪元素是 abspos,默认压在正文上 */
+.th-location-card.th-managed-card .th-managed-card-main { position:relative;z-index:1; }
+.th-location-card.th-managed-card:hover {
+  transform:translateY(-2px);
+  border-color:rgba(255,180,210,0.55);
+  box-shadow:var(--sh-2),0 0 16px rgba(255,180,210,0.10);
 }
-.th-bind-dot.bound { background:var(--accent-blue);box-shadow:0 0 0 2px rgba(90,158,240,0.16),0 0 10px rgba(90,158,240,0.45); }
 .th-managed-state {
   font-size:11px;font-weight:900;color:var(--tx3);padding:1px 6px;border-radius:999px;
   background:rgba(180,160,190,0.14);border:1px solid var(--dv);cursor:pointer;font-family:inherit;
@@ -1844,11 +1879,6 @@ select.th-edit-select:focus {
 }
 .th-managed-state:hover { color:var(--pink);border-color:var(--pink2);box-shadow:0 2px 8px rgba(255,126,170,0.16); }
 .th-managed-card.enabled .th-managed-state { color:#fff;background:linear-gradient(90deg,var(--pink),var(--lav));border-color:transparent; }
-.th-event-card.enabled { background:linear-gradient(135deg,rgba(244,224,255,0.95),rgba(222,244,255,0.92),rgba(255,236,218,0.92)); }
-@keyframes managed-card-glow {
-  0%,100%{background-position:0% 50%;}
-  50%{background-position:100% 50%;}
-}
 .th-location-card .th-loc-delete {
   position:absolute;top:4px;right:6px;width:20px;height:20px;border-radius:50%;
   border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;
@@ -1856,12 +1886,17 @@ select.th-edit-select:focus {
 }
 .th-location-card:hover .th-loc-delete { opacity:1; }
 .th-location-card .th-loc-delete:hover { background:rgba(200,60,60,0.85);color:#fff; }
+/* §11.18 C5 新建虚线票占位。hover 实化 = 虚线转实线 + 底填起来 */
 .th-location-add-btn {
-  width:100%;padding:10px;border-radius:10px;cursor:pointer;
-  border:2px dashed var(--dv2);background:var(--bg3);color:var(--tx2);
-  font-size:15px;font-weight:700;font-family:inherit;transition:all 0.25s;
-  display:flex;align-items:center;justify-content:center;gap:6px;margin-top:10px;
+  width:100%;padding:14px 10px;border-radius:var(--r-card);cursor:pointer;
+  border:1.5px dashed var(--dv2);background:transparent;color:var(--tx3);
+  font-size:14px;font-weight:700;font-family:var(--font-label);
+  transition:border-color .25s,color .25s,background .25s,box-shadow .25s;
+  display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;
 }
+/* 图标管线把 <i class="fa-*"> 换成 <svg class="th-ico">,选择器必须落在 .th-ico 上 */
+.th-location-add-btn .th-ico { font-size:15px;color:var(--pink2);transition:color .25s; }
+.th-location-add-btn:hover .th-ico { color:var(--pink); }
 /* 需求4：地点导入导出按钮 */
 .th-loc-io-btns { display:flex;gap:6px;margin-bottom:12px; }
 .th-loc-io-btn {
@@ -1871,7 +1906,12 @@ select.th-edit-select:focus {
   display:flex;align-items:center;justify-content:center;gap:5px;
 }
 .th-loc-io-btn:hover { border-color:var(--pink2);color:var(--pink);background:var(--pink3); }
-.th-location-add-btn:hover { border-color:var(--mint2);color:var(--mint);background:rgba(94,168,128,0.06); }
+.th-location-add-btn:hover {
+  border-style:solid;border-color:rgba(255,180,210,0.55);color:var(--pink);
+  background:linear-gradient(135deg,rgba(255,250,252,0.88),rgba(250,245,255,0.82));
+  box-shadow:var(--sh-1);
+}
+.th-location-add-btn:focus-visible { outline:none;border-color:var(--pink2);box-shadow:var(--focus-ring); }
 .th-location-add-form { display:none;margin-top:10px;padding:12px;background:var(--bg3);border-radius:10px;border:1px solid var(--dv2); }
 .th-location-add-form input,.th-location-add-form textarea {
   width:100%;padding:8px 10px;border:1px solid var(--dv2);border-radius:6px;
@@ -2136,11 +2176,7 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
 .th-topbar-title:hover::before { animation: title-sweep 1.2s ease-in-out; }
 /* 按钮光晕脉冲 */
 .th-icon-btn.active {
-  animation: btn-pulse 2s ease-in-out infinite;
-}
-@keyframes btn-pulse {
-  0%, 100% { box-shadow: 0 4px 12px rgba(255,107,157,0.4), 0 0 0 0 rgba(255,107,157,0.3); }
-  50% { box-shadow: 0 4px 16px rgba(255,107,157,0.5), 0 0 0 6px rgba(255,107,157,0); }
+  box-shadow: 0 4px 12px rgba(255,107,157,0.4), 0 0 0 0 rgba(255,107,157,0.3);
 }
 /* 筛选按钮增强 */
 .th-npc-filter-btn {
@@ -2435,11 +2471,6 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
     0 0 48px rgba(200,120,255,0.15),
     0 0 80px rgba(255,180,220,0.08),
     inset 0 0 12px rgba(255,255,255,0.3);
-  animation: avatar-glow 3s ease-in-out infinite;
-}
-@keyframes avatar-glow {
-  0%, 100% { box-shadow: 0 0 28px rgba(232,107,154,0.3), 0 0 48px rgba(200,120,255,0.15), 0 0 80px rgba(255,180,220,0.08), inset 0 0 12px rgba(255,255,255,0.3); }
-  50% { box-shadow: 0 0 36px rgba(232,107,154,0.4), 0 0 60px rgba(200,120,255,0.22), 0 0 100px rgba(255,180,220,0.12), inset 0 0 16px rgba(255,255,255,0.4); }
 }
 .th-avatar-ring::before {
   border: 1.5px dashed rgba(212,165,116,0.35);
@@ -2550,11 +2581,6 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
       transparent 68%);
   background-size: 300% 300%;
   background-repeat: no-repeat;
-  animation: bg-mist-flow 20s ease-in-out infinite;
-}
-@keyframes bg-mist-flow {
-  0%, 100% { background-position: 0% 0%; }
-  50%      { background-position: 100% 100%; }
 }
 
 /* 迷你按钮增强 */
@@ -2847,7 +2873,6 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
 }
 
 @media (hover:none), (pointer:coarse) {
-  .th-npc-metric-wheel { display:none !important; }
   .th-block:hover,
   .th-icon-btn:hover,
   .th-mini-btn:hover,
@@ -3011,12 +3036,14 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
   font-family: var(--font-label, inherit);
 }
 .th-review-pending-count {
-  display: inline-block;
-  min-width: 22px; height: 18px; line-height: 18px;
-  padding: 0 7px; margin-left: 6px;
-  background: linear-gradient(135deg, var(--pink), var(--lav));
-  color: #fff; border-radius: 9px;
-  font-size: 11px; font-weight: 900; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; padding: 0 5px; margin-left: 6px;
+  background: linear-gradient(135deg,#fff,var(--pink3));
+  color: var(--pink2);
+  border: 1.5px solid var(--rose);
+  border-radius: 50%;
+  font-size: 11px; font-weight: 900;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
   vertical-align: 2px;
 }
 .th-review-pending-count:empty { display: none; }
@@ -3110,19 +3137,20 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
 .th-review-item-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .th-review-item-btn {
   width: 26px; height: 26px; padding: 0;
-  border: none; border-radius: 7px;
-  background: rgba(255,255,255,0.7);
-  color: var(--tx2);
+  border: none; border-radius: 50%;
+  background: linear-gradient(135deg,#fff,var(--bg4));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 1px 3px rgba(160,100,140,.18);
+  color: var(--tx3);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 900;
-  transition: background 0.18s, color 0.18s, transform 0.12s;
+  transition: transform 0.12s, background 0.18s, color 0.18s, box-shadow 0.18s;
 }
-.th-review-item-btn:hover { transform: scale(1.1); }
-.th-review-item-btn:active { transform: scale(0.92); }
-.th-review-item-btn.th-btn-approve:hover { background: #2a9d4a; color: #fff; }
-.th-review-item-btn.th-btn-reject:hover { background: #d63050; color: #fff; }
-.th-review-item-btn.th-btn-edit:hover { background: var(--pink); color: #fff; }
+.th-review-item-btn .th-rr-ico { width: 14px; height: 14px; }
+.th-review-item-btn:hover { transform: scale(1.12); }
+.th-review-item-btn:active { transform: scale(0.9); }
+.th-review-item-btn.th-btn-approve:hover { background: linear-gradient(135deg,#7fe0af,var(--mint)); color:#fff; box-shadow: inset 0 -2px 4px rgba(0,0,0,.14), 0 2px 6px rgba(80,200,150,.4); }
+.th-review-item-btn.th-btn-reject:hover { background: linear-gradient(135deg,#ffa0b6,var(--rose)); color:#fff; box-shadow: inset 0 -2px 4px rgba(0,0,0,.14), 0 2px 6px rgba(255,90,140,.4); }
+.th-review-item-btn.th-btn-edit:hover { background: linear-gradient(135deg,#dcc0ff,var(--lav)); color:#fff; box-shadow: inset 0 -2px 4px rgba(0,0,0,.14), 0 2px 6px rgba(190,120,255,.4); }
 .th-review-item-btn.th-btn-jump-npc { width: 22px; height: 22px; font-size: 11px; }
 .th-review-item-btn.th-btn-jump-npc:hover { background: var(--lav); color: #fff; }
 .th-review-item.status-approved { opacity: 0.5; }
@@ -4028,42 +4056,41 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
 .th-tag-group {
   margin-bottom: 10px;
 }
-/* §10.5 P3：桶 header 降权 — 从"卡片级"(边框+渐变背景+大圆角)改为"轻量分区标签"
-   去掉卡片级边框/渐变背景,改纯文字行 + 底部渐隐分隔线;色点缩到 10px 无阴影;
-   计数去独立背景改灰色文字;hover 只点亮文字色,不变粉块(避免与筛选 active 混淆)。 */
+/* 美化 §11.9 C3 蜡封缎带桶 header */
+/* 桶 header 取 `.th-wb-group-header` 的同一组值 —— 与主 modal 分组共用一套语言 */
 .th-tag-group-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 4px 8px;
+  padding: 9px 12px;
   cursor: pointer;
-  border-radius: 8px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid transparent;
-  transition: color 0.2s, background 0.2s;
+  background: linear-gradient(135deg, var(--pink3), var(--lav3));
+  border: 1px solid var(--dv2);
+  border-radius: var(--r-btn);
+  font-size: 13.5px;
+  font-weight: 900;
+  color: var(--tx);
+  transition: border-color 0.2s, box-shadow 0.2s;
   user-select: none;
   position: relative;
 }
-/* 底部渐隐分隔线(两端淡出,从属于卡片而非抢戏) */
+/* §5.1 绢纹 */
 .th-tag-group-header::after {
   content: '';
   position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--dv2) 12%, var(--dv2) 88%, transparent);
-  opacity: 0.7;
+  inset: 0;
+  background-image: var(--thm-noise);
+  background-repeat: repeat;
+  opacity: 0.06;
+  mix-blend-mode: multiply;
   pointer-events: none;
 }
 .th-tag-group-header:hover {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-.th-tag-group-header:hover .th-tag-group-name {
-  color: var(--pink);
+  border-color: var(--pink2);
+  box-shadow: var(--sh-1);
 }
 .th-tag-group-caret {
+  margin-left: auto;
   transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
   color: var(--tx3);
   font-size: 11px;
@@ -4082,24 +4109,25 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
 .th-tag-group-header:hover .th-tag-color-swatch {
   transform: scale(1.25);
 }
+/* 组名与计数压在玫瑰金缎带上,故字色走深墨而不是 --tx3:淡灰在金上读不出来。
+   §11.9 组名定数 --font-label 14px/700。 */
 .th-tag-group-name {
-  font-weight: 800;
+  font-family: var(--font-label);
+  font-weight: 700;
   font-size: 14px;
-  color: var(--tx);
-  transition: color 0.2s;
+  color: #4a2f28;
   letter-spacing: 0.2px;
 }
-/* §10.5 P3：计数胶囊去独立背景,改淡色文字(轻量) */
 .th-tag-group-count {
   font-size: 12px;
   font-weight: 700;
-  color: var(--tx3);
+  color: rgba(74,47,40,.66);
   background: transparent;
   padding: 0;
   border-radius: 0;
 }
 .th-tag-group-content {
-  margin-top: 6px;
+  margin-top: 8px;
   padding-left: 14px;
   transition: all 0.25s ease;
 }
@@ -4125,8 +4153,6 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
   position: relative;
   overflow: visible;
 }
-/* 卡片头:图标 + 标题 横排一行(标题在预览上方,不再被简介挤扁) */
-.th-managed-grid .th-managed-card > .th-bind-dot,
 .th-managed-grid .th-managed-card > i {
   flex-shrink: 0;
 }
@@ -4185,10 +4211,11 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
   position: absolute;
   right: 4px;
   bottom: 4px;
+  z-index: 3;
   background: rgba(255,250,252,0.92);
-  border-radius: 8px;
+  border-radius: var(--r-btn-sm);
   padding: 2px;
-  box-shadow: 0 2px 8px rgba(180,100,140,0.15);
+  box-shadow: var(--sh-1);
   opacity: 0;
   transition: opacity 0.18s;
 }
@@ -4218,8 +4245,15 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
+  /* 美化 §7.2 I1 吸顶,滚动容器是 .th-modal-body。
+     ⚠ sticky 的 top 锚 scrollport 的 padding box ⇒ 三个方向都要负 margin 铺出
+       .th-modal-body 的 18/20 内边距,否则卡片从缎带旁边与上方擦过去。 */
+  position: sticky;
+  top: -18px;
+  z-index: var(--z-sticky);
+  margin: -18px -20px 10px;
+  padding: 26px 20px 10px;
+  background: var(--bg);
   border-bottom: 1px solid var(--dv2);
   box-shadow: 0 1px 0 rgba(200,160,190,0.08);
   flex-wrap: nowrap;
@@ -4342,31 +4376,6 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* 搜索框容器 + 历史下拉 */
-.th-location-search {
-  position: relative;
-}
-.th-search-history {
-  background: var(--bg2);
-  border: 1.5px solid var(--dv2);
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(160, 120, 190, 0.12);
-  overflow: hidden;
-}
-.th-search-history-item {
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--tx2);
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: background 0.1s;
-}
-.th-search-history-item:hover {
-  background: var(--pink3);
-  color: var(--pink);
-}
 .th-search-history-del {
   color: var(--tx3);
   font-size: 16px;
@@ -4415,7 +4424,7 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
 }
 .th-card-actions {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   opacity: 0;
   transition: opacity 0.2s;
   flex-shrink: 0;
@@ -4423,71 +4432,60 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
 .th-managed-card:hover .th-card-actions {
   opacity: 1;
 }
+/* §11.4 C4 珐琅纽扣。釉光配方同 .th-mgsearch-ico(§5.1) */
 .th-card-act {
+  position: relative;
   width: 24px;
   height: 24px;
-  border-radius: 8px;
+  border-radius: 50%;
   border: none;
-  background: rgba(180, 160, 190, 0.12);
-  color: var(--tx2);
   cursor: pointer;
   font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  color: var(--tx2);
+  background-color: transparent;
+  background-image: radial-gradient(circle at 50% 60%, var(--bg2), var(--bg4)), var(--enamel-hi);
+  box-shadow: var(--enamel-edge);
+  transition: transform .15s, color .15s, box-shadow .15s;
 }
 .th-card-act:hover {
-  background: var(--pink3);
-  color: var(--pink);
-  transform: translateY(-1px);
+  color: #fff;
+  background-image: radial-gradient(circle at 50% 60%, var(--pink2), var(--pink)), var(--enamel-hi);
+  transform: translateY(-2px);
+  box-shadow: var(--enamel-edge), 0 0 6px var(--pink3);
+}
+/* hover 已 -2px,press 回 -1px 才是净下沉 1px(§9.5) */
+.th-card-act:active { transform: translateY(-1px); }
+.th-card-act:focus-visible {
+  outline: none;
+  box-shadow: var(--enamel-edge), var(--focus-ring);
 }
 .th-card-act-danger:hover {
-  background: rgba(220, 80, 80, 0.9);
-  color: #fff;
+  background-image: radial-gradient(circle at 50% 60%, var(--coral), #d9534a), var(--enamel-hi);
+  box-shadow: var(--enamel-edge), 0 0 6px rgba(217,83,74,0.40);
 }
 
-/* 绿态（已绑定且开启） */
-.th-bind-dot.enabled {
-  background: var(--mint);
-  box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2);
-}
-.th-managed-card.bound.enabled {
-  border-color: var(--mint);
-  box-shadow: 0 0 0 1px rgba(52, 199, 89, 0.2);
+/* §11.8 C2 书签光片,几何在地图段 .thm-bm 那条 */
+.th-managed-card .th-bm { flex: 0 0 auto; }
+/* 关闭态不挂光片,留槽保行首对齐 */
+.th-bm-slot {
+  flex: 0 0 6px;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 
-/* 蓝点（绑定未开启）—— 卡片本身不再加边框，已绑定即视为正常态 */
-.th-bind-dot.partial {
-  background: var(--accent-blue);
-  box-shadow: 0 0 0 2px rgba(90, 158, 240, 0.2);
-}
-/* 已绑定（未开启）：正常显示，不加提示边框 */
-.th-managed-card.bound.partial {
-  border-color: var(--dv2);
-  border-style: solid;
+/* 未绑定:虚线本身就是形状编码(§12-21),不再用警示红 */
+.th-location-card.th-managed-card.unbound {
+  border: 1.5px dashed var(--dv2);
 }
 
-/* 未绑定警示：红色虚线边框提醒「该卡片未找到对应世界书条目」 */
-.th-managed-card.unbound {
-  border-color: var(--accent-red);
-  border-style: dashed;
-  box-shadow: 0 0 0 1px rgba(255, 90, 106, 0.15);
+/* 收藏金环压在绑定态之上;用 ring 不用第四档抬升(§16 elev ≤3) */
+.th-location-card.th-managed-card.favorite {
+  box-shadow: 0 0 0 2px rgba(255,170,43,0.34), var(--sh-1);
 }
-
-/* 收藏卡片高亮（金色实线）—— 放在绑定态之后，优先级更高：
-   收藏是玩家主观标记，应压过未绑定的红色警示虚线，与"绑定已开启"绿态并存时金色更醒目。 */
-.th-managed-card.favorite,
-.th-managed-card.bound.partial.favorite {
-  border-color: var(--gold);
-  border-style: solid;
-  box-shadow: 0 0 0 1px rgba(255, 170, 43, 0.3), 0 4px 16px rgba(255, 170, 43, 0.18);
-}
-/* 收藏 + 绑定已开启：金色实线 + 绿色发光叠加（两种状态都可见） */
-.th-managed-card.bound.enabled.favorite {
-  border-color: var(--gold);
-  border-style: solid;
-  box-shadow: 0 0 0 1px rgba(52, 199, 89, 0.25), 0 0 0 3px rgba(255, 170, 43, 0.22), 0 4px 16px rgba(255, 170, 43, 0.15);
+.th-location-card.th-managed-card.favorite:hover {
+  box-shadow: 0 0 0 2px rgba(255,170,43,0.34), var(--sh-2);
 }
 .th-fav-star {
   color: var(--gold);
@@ -4900,7 +4898,6 @@ textarea.th-wb-field { resize:vertical;line-height:1.55; }
 .th-api-preset-env .th-api-env-activate, .th-api-preset-env .th-api-env-test,
 .th-api-preset-env .th-api-env-preview { grid-column:span 1; }
 .th-api-preset-env .th-api-env-once { grid-column:1/4; font-size:12px; color:var(--tx2); justify-self:start; }
-/* 反馈修复 2026-06-24：AI 来源区块新布局 */
 .th-api-ai-api { display:grid; grid-template-columns:auto 1fr auto auto; gap:6px 8px; align-items:center; }
 .th-api-ai-api .th-api-ai-mode-lbl { grid-row:1; }
 .th-api-ai-api #th-api-aipreset { grid-column:2; }
@@ -12842,7 +12839,7 @@ input[type=range].thw-thr-field { padding:0; accent-color:var(--thw-accent); }
 
 /* ---------- ① 主角：只改头像显示，96px 圆环 → 148×230 竖版立绘 ---------- */
 .th-user-hero .th-avatar-ring {
-  width: 148px; height: 230px;
+  width: 164px; height: 255px;
   border-radius: 16px;
   padding: 4px;
 }
@@ -13111,3 +13108,1265 @@ input[type=range].thw-thr-field { padding:0; accent-color:var(--thw-accent); }
 }
 /* 模式切换按钮长在分区标题里，跟顶栏筛选按钮同一套外观 */
 .th-btn-roster-mode { flex-shrink: 0; font-size: 11px; padding: 2px 9px; }
+
+/* ============================================================
+   多层交互地图「云间连理·糖霜琉璃」
+
+   ⚠ 本段整段不用 backdrop-filter:宿主「减少模糊」会给 body 加 no-blur,
+     其 `backdrop-filter:unset !important` 打在 * 上 ⇒ 它在这个宿主里从来不生效。
+     玻璃感一律靠渐变 + inset 高光 + 噪点做(14a)。
+
+   三条落位约束(11.1-b),动本段前先读:
+   ① token 落 .thm-shell 而非 :root —— 本表 :root 已被项目 token 占用,
+      地图重定义 --thw-* 会污染整个状态栏
+   ② .thm-shell 必须 absolute 不许 fixed —— 它在 modal 内容盒里,不占视口
+   ③ 字体/字色/night 相一律落壳上不落 body,页级规则不归地图管
+   ============================================================ */
+
+/* ===== 8 token ===== */
+.thm-shell{
+  /* 8.19 总纲 · 甜美甜蜜:主色仍单一,但把"糖果粉"往"樱花奶粉"挪一点,少一分艳、多一分甜 */
+  --thw-accent:#ff7fa4;
+  --thw-accent-2:color-mix(in srgb,var(--thw-accent) 52%,#fff);
+  --thw-accent-3:color-mix(in srgb,var(--thw-accent) 22%,#fff); /* 极浅,用来铺大面积不刺眼 */
+  --thw-bg:#fff7f3;
+  --thw-panel:rgba(255,252,252,.76);
+  --thw-soft:color-mix(in srgb,var(--thw-accent) 7%,#fffbf8);
+  --thw-line:color-mix(in srgb,var(--thw-accent) 22%,rgba(168,132,140,.14));
+  --thw-line-soft:color-mix(in srgb,var(--thw-accent) 11%,rgba(168,132,140,.10));
+  /* 装饰金属色是玫瑰金,不是宫廷金:它被画框/标题/标签/卡片/罗盘全体引用,
+     金一重整场就"贵而不甜"。仍算金属装饰色,不占主题色额度(8.1a)。 */
+  --thm-gold-1:#ffe9e4; --thm-gold-2:#d99a94; --thm-gold-3:#a86a70;
+  --thm-gold-line:linear-gradient(135deg,var(--thm-gold-1),var(--thm-gold-2) 44%,#fff4ef 68%,var(--thm-gold-3));
+  --thm-sugar:#fff0f5;
+  --thw-text:#33212a;
+  --thw-text-2:color-mix(in srgb,var(--thw-text) 70%,transparent);
+  --thw-muted:color-mix(in srgb,var(--thw-text) 50%,transparent);
+  --thw-faint:color-mix(in srgb,var(--thw-text) 34%,transparent);
+  /* 8.15 阴影只三档。投影色带一点玫瑰:纯灰影压在暖底上会发脏 */
+  --thw-elev-contact:0 2px 8px rgba(150,90,110,.10),inset 0 1px 0 rgba(255,255,255,.7);
+  --thw-elev-card:inset 0 1px 0 rgba(255,255,255,.8),inset 0 -1px 0 rgba(170,110,130,.06),0 8px 20px rgba(150,90,110,.13);
+  --thw-elev-float:inset 0 1px 0 rgba(255,255,255,.8),0 16px 36px rgba(150,90,110,.20);
+  --thw-std:cubic-bezier(.4,0,.2,1);
+  --thw-in:cubic-bezier(.2,.8,.2,1);
+  --thw-drift:cubic-bezier(.25,1,.5,1);
+  --thw-bounce:cubic-bezier(.175,.885,.32,1.275);
+  --thw-r-xs:4px; --thw-r-sm:8px; --thw-r-md:12px; --thw-r-lg:16px; --thw-r-pill:999px;
+  --thw-sp-1:4px; --thw-sp-2:8px; --thw-sp-3:12px; --thw-sp-4:16px; --thw-sp-5:24px;
+  /* 8.1b 那张噪点声明在 :root(状态栏也要用),这里靠继承拿,不重复声明 */
+  /* 4.4 四相六量:改这几个即换整场光照 */
+  --thm-sky-1:#cfe4fd; --thm-sky-2:#ffeef4; --thm-sun:rgba(255,206,190,.52);
+  --thm-cloud-rim:#ffe9c9;   /* 金边云(6.2) */
+  --thm-glow-lv:1;           /* 全局光强,兜底取白昼档 */
+  --thm-wick-lv:.55;         /* 灯芯亮度 */
+  --thm-rim:rgba(255,255,255,.9);    /* 6.5 版图外缘边缘光 */
+  /* 8.2 字体三档直接取本表 :root 的同名 token,不另立一套。
+     ⚠ 三个字体名都不配 @font-face:禁外部字体 CDN(time-bomb),玩家本机有就用、
+       没有就沿回退链走到系统字。 */
+  --font-heading:"寒蝉团圆体 Sans",'PingFang SC','Microsoft YaHei',sans-serif;
+  --font-body:"ChillHuoFangSong",'PingFang SC','Hiragino Sans GB','Noto Sans SC',serif;
+  --font-label:"ChillHuoKai",'PingFang SC','STKaiti','KaiTi',serif;
+  /* 描金字渐变,只许 L3 主标题一处用。
+     ⚠ 整条压在深端:高光档取近白会在浅卡底上消失。⚠ 高光带宽 8%,铺宽读成中间褪色。 */
+  --thm-gold-text:linear-gradient(103deg,#7d3d52 0%,#a86a70 30%,#d99a94 46%,#d99a94 54%,#a86a70 70%,#7d3d52 100%);
+  /* 11.10-K1 缠枝纹 tile:120×22 无缝横向平铺;竖版在 SVG 里换坐标轴写。
+     ⚠ 不能用 CSS rotate 转横版当竖版 —— rotate 会把 background-repeat 的接缝一起转,拼不上。
+     ⚠ 颜色写死在 tile 里(currentColor 在 background-image 里拿不到),强弱靠使用处 opacity 调。 */
+  --thm-vine-tile:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='22'><g fill='none' stroke='%23d99a94' stroke-width='1.2' stroke-linecap='round'><path d='M0 11q15 -9 30 0t30 0t30 0t30 0'/><path d='M22 8q4 -6 9 -5' /><path d='M52 14q4 6 9 5'/><path d='M82 8q4 -6 9 -5'/></g><g fill='%23d99a94'><ellipse cx='33' cy='3.4' rx='3.4' ry='2' transform='rotate(-24 33 3.4)'/><ellipse cx='63' cy='18.6' rx='3.4' ry='2' transform='rotate(24 63 18.6)'/><ellipse cx='93' cy='3.4' rx='3.4' ry='2' transform='rotate(-24 93 3.4)'/><circle cx='7' cy='7' r='1.7'/><circle cx='67' cy='7' r='1.7'/></g></svg>");
+  --thm-vine-tile-v:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='120'><g fill='none' stroke='%23d99a94' stroke-width='1.2' stroke-linecap='round'><path d='M11 0q-9 15 0 30t0 30t0 30t0 30'/><path d='M8 22q-6 4 -5 9'/><path d='M14 52q6 4 5 9'/><path d='M8 82q-6 4 -5 9'/></g><g fill='%23d99a94'><ellipse cx='3.4' cy='33' rx='2' ry='3.4' transform='rotate(-24 3.4 33)'/><ellipse cx='18.6' cy='63' rx='2' ry='3.4' transform='rotate(24 18.6 63)'/><ellipse cx='3.4' cy='93' rx='2' ry='3.4' transform='rotate(-24 3.4 93)'/><circle cx='7' cy='7' r='1.7'/><circle cx='7' cy='67' r='1.7'/></g></svg>");
+
+  /* 9.2 时长谱:全图时长只从这里取 */
+  --thm-t-micro:140ms;    /* 微反馈,留余量给 14-1 的 100ms 硬线 */
+  --thm-t-layer:450ms;    /* 切层 + 晕染转场 */
+  --thm-t-phase:900ms;    /* 时相切换 */
+  --thm-t-breath:4s;      /* 呼吸时钟周期,元素只取相位不改这个数 */
+}
+/* box-sizing 收在地图子树内:不许动全局盒模型 */
+.thm-shell,.thm-shell *{box-sizing:border-box;}
+.thm-shell button{font-family:inherit;}
+/* ===== 外壳(contain:none 见 12-4)=====
+   ⚠ 必须 absolute 不许 fixed:壳在 modal 内容盒内,而 fixed 在父页
+     `.th-modal{contain:layout paint}` 下锚点会变(11.1-a)。 */
+.thm-shell{
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  contain:none; overflow:hidden;
+  font-family:var(--font-body);
+  color:var(--thw-text);
+  -webkit-font-smoothing:antialiased;
+  /* 6.1 双色天幕:顶偏蓝紫、底偏粉橙,时相一改 --thm-sky-1/2 整场天色跟着换。
+     ⚠ 4.4 全局光强只乘这三道天光,纸底/天幕色不许再乘一次。 */
+  background:
+    radial-gradient(120% 70% at 50% -10%,
+      color-mix(in srgb,var(--thm-sun) calc(100% * var(--thm-glow-lv,1)),transparent), transparent 62%),
+    radial-gradient(52% 44% at 18% 26%,
+      color-mix(in srgb,rgba(255,186,206,.20) calc(100% * var(--thm-glow-lv,1)),transparent), transparent 70%),
+    radial-gradient(46% 40% at 84% 70%, rgba(198,206,248,.18), transparent 72%),
+    radial-gradient(40% 36% at 62% 12%,
+      color-mix(in srgb,rgba(255,222,198,.18) calc(100% * var(--thm-glow-lv,1)),transparent), transparent 70%),
+    linear-gradient(178deg, var(--thm-sky-1) 0%, var(--thm-sky-2) 60%, var(--thm-sky-2) 100%);
+  transition:background var(--thm-t-phase) var(--thw-std);
+}
+/* ============ 9.3 呼吸时钟:一条 4s CSS 动画,各件靠 animation-delay 取相位 ============
+   ⚠ delay 必须由 JS 写负值锁绝对时间(`phaseLock`):按 MVU 增量重建的件默认从 0 相起跑,
+     花藤六枚会读成"一圈同时闪"。
+   ⚠ 正弦用 0/25/50/75 四帧 + ease-in-out 近似;**每条动画的基态声明必须等于相位中点**,
+     档 2 关掉动画后元素直接落在那个值上(否则会定在某一相的极值)。
+   往复类一律只动 transform / opacity。 */
+@keyframes thmBwCradle{0%,50%,100%{transform:translateY(0);}25%{transform:translateY(4px);}75%{transform:translateY(-4px);}}
+@keyframes thmBwClouds{0%,50%,100%{transform:translateY(0);}25%{transform:translateY(6px);}75%{transform:translateY(-6px);}}
+@keyframes thmBwBeam{0%,50%,100%{opacity:.75;}25%{opacity:.89;}75%{opacity:.61;}}
+@keyframes thmBwCat{0%,50%,100%{transform:translateY(0);}25%{transform:translateY(1.6px);}75%{transform:translateY(-1.6px);}}
+@keyframes thmBwHot{
+  0%,50%,100%{opacity:.775;transform:scale(1);}
+  25%{opacity:1;transform:scale(1.14);}
+  75%{opacity:.55;transform:scale(.86);}
+}
+/* 花藤 --vx/--vy/--vo 是每枚的静态摆位,var() 在 keyframe 里按元素解析 ⇒ 一条动画通吃六枚 */
+@keyframes thmBwVine{
+  0%,50%,100%{transform:translate(calc(-50% + var(--vx,0px)),calc(var(--vy,-10px) - 1.5px)) scale(.86);
+    opacity:calc(var(--vo,.9) * .67);}
+  25%{transform:translate(calc(-50% + var(--vx,0px)),calc(var(--vy,-10px) - 3px)) scale(1);
+    opacity:var(--vo,.9);}
+  75%{transform:translate(calc(-50% + var(--vx,0px)),var(--vy,-10px)) scale(.72);
+    opacity:calc(var(--vo,.9) * .34);}
+}
+/* 掠过是进度不是正弦 ⇒ linear,且只占相位前 28%,其余停在右侧不可见处 */
+@keyframes thmBwSheen{
+  0%{transform:translateX(-120%);opacity:0;}
+  7%{opacity:.9;}
+  26%{transform:translateX(560%);opacity:.9;}
+  28%,100%{transform:translateX(560%);opacity:0;}
+}
+/* 8.12 档1 = 停呼吸相位与云层位移。基态即中点,故直接 animation:none 落静止 */
+.thm-tier1 .thm-cradle,.thm-tier1 .thm-clouds,.thm-tier1 .thm-beam,
+.thm-tier1 .thm-vine,.thm-tier1 .thm-sheen i,.thm-tier1 .thm-hot i,.thm-tier1 .thm-cat,
+.thm-nb .thm-cradle,.thm-nb .thm-clouds,.thm-nb .thm-beam,
+.thm-nb .thm-vine,.thm-nb .thm-sheen i,.thm-nb .thm-hot i,.thm-nb .thm-cat{animation:none;}
+
+/* 6.3 云托版图:版图大陆下缘坐一团云,让大陆"浮"起来点题浮空花园 */
+.thm-cradle{position:absolute;left:0;right:0;bottom:-4%;height:52%;z-index:4;pointer-events:none;}
+.thm-cradle span{position:absolute;border-radius:50%;background:var(--crf,#fff);filter:blur(30px);}
+.thm-shell.ready .thm-cradle{opacity:1;}
+/* 9.3 相位 .15 */
+.thm-cradle{opacity:0;transition:opacity 1.1s var(--thw-std) .15s;
+  animation:thmBwCradle var(--thm-t-breath) ease-in-out infinite;}
+/* ===== 8.18-1 描金画框:纯装饰层,绝不能吃掉相机拖拽 ===== */
+.thm-frame{position:absolute;inset:0;z-index:38;pointer-events:none;}
+.thm-frame::before{ /* 外线:border-image 不跟 border-radius ⇒ 圆角改用 mask 描边 */
+  content:''; position:absolute; inset:7px; border-radius:var(--thw-r-lg); pointer-events:none;
+  background:var(--thm-gold-line);
+  -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
+          mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+  padding:1.5px; opacity:.92;
+}
+.thm-frame::after{  /* 内细线 + 极淡内晕,双线才有"画框"而不是"描边" */
+  content:''; position:absolute; inset:13px; border-radius:var(--thw-r-md);
+  border:1px solid color-mix(in srgb,var(--thm-gold-2) 40%,transparent);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.6),inset 0 0 30px rgba(200,130,140,.09);
+}
+/* ===== 11.10 画框内侧三件:缠枝纹 K1 / 珍珠母贝 J6 / 烫金流光 J7 =====
+   全挂 .thm-frame 内部,靠继承拿 pointer-events:none —— 装饰绝不许吃相机拖拽。 */
+/* ⚠ 只画一条边的图案靠 repeat 铺四边(同"噪点只做一张")。
+   ⚠ 用 background-image 不再开伪元素:.thm-frame 的 ::before/::after 已被双线占满。 */
+.thm-vines{
+  position:absolute; inset:14px; border-radius:var(--thw-r-lg); pointer-events:none;
+  opacity:.04;
+  background-image:var(--thm-vine-tile),var(--thm-vine-tile);
+  background-repeat:repeat-x,repeat-x;
+  background-position:top center,bottom center;
+  background-size:120px 22px,120px 22px;
+}
+.thm-vines::before{ /* 左右两边:同一个 tile 换轴 */
+  content:''; position:absolute; inset:0;
+  background-image:var(--thm-vine-tile-v),var(--thm-vine-tile-v);
+  background-repeat:repeat-y,repeat-y;
+  background-position:left center,right center;
+  background-size:22px 120px,22px 120px;
+}
+/* J6 珍珠母贝:只画框顶缘一道(11.10)。没有 left/right/bottom 版,别照对称直觉补齐。 */
+.thm-nacre{
+  position:absolute; left:9%; right:9%; top:8px; height:3px; border-radius:var(--thw-r-pill);
+  pointer-events:none; opacity:.10;
+  background:linear-gradient(90deg,#bfe6ff,#ffd8f0 22%,#fff6c9 44%,#c9ffe4 62%,#e2d4ff 82%,#bfe6ff);
+}
+/* J7 烫金流光:读 9.3 相位 .50(进度,非正弦)。
+   ⚠ 只许动 transform/opacity,动 left/width 会每帧触发布局。 */
+.thm-sheen{
+  position:absolute; left:7px; right:7px; top:7px; height:2px; overflow:hidden;
+  border-radius:var(--thw-r-pill); pointer-events:none;
+}
+.thm-sheen i{
+  position:absolute; top:0; bottom:0; left:0; width:22%;
+  background:linear-gradient(90deg,transparent,rgba(255,247,232,.95),transparent);
+  transform:translateX(560%); opacity:0;
+  animation:thmBwSheen var(--thm-t-breath) linear infinite;
+}
+/* K6 垂挂小饰:画框上沿垂 2 枚极小珍珠(1 枚会看着像掉了一颗)。
+   ⚠ 不挂呼吸时钟 —— 9.3 相位表里没有这一项,表里没有的就该静止。 */
+.thm-drop{position:absolute;top:8px;width:7px;pointer-events:none;}
+.thm-drop.l{left:16%;}
+.thm-drop.r{right:16%;}
+.thm-drop i{ /* 细吊线 */
+  position:absolute; left:3px; top:0; width:1px; height:13px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--thm-gold-2) 70%,transparent),transparent);
+}
+.thm-drop b{ /* 珠子:高光在上、暗在下 */
+  position:absolute; left:0; top:12px; width:7px; height:7px; border-radius:50%;
+  background:radial-gradient(60% 60% at 34% 30%,#fff 0%,#ffeef4 40%,#e8bfc8 100%);
+  box-shadow:inset 0 -1px 2px rgba(168,106,112,.30);
+}
+.thm-corner{position:absolute;width:58px;height:58px;opacity:.9;}
+.thm-corner.tl{left:4px;top:4px;}
+.thm-corner.tr{right:4px;top:4px;transform:scaleX(-1);}
+.thm-corner.bl{left:4px;bottom:4px;transform:scaleY(-1);}
+.thm-corner.br{right:4px;bottom:4px;transform:scale(-1,-1);}
+/* 四角暗角。带玫瑰调并压淡:褐色暗角会让整张图发旧 */
+.thm-vig{position:absolute;inset:0;z-index:29;pointer-events:none;
+  background:radial-gradient(120% 94% at 50% 46%,transparent 60%,rgba(158,104,120,.11) 100%);}
+/* 顶栏 */
+.thm-topbar{
+  flex:0 0 auto; display:flex; align-items:center; gap:var(--thw-sp-3);
+  padding:10px 22px; min-height:58px; position:relative; z-index:40;
+  background:linear-gradient(180deg,rgba(255,253,249,.82),rgba(255,250,243,.56)),var(--thw-panel);
+  border-bottom:1px solid var(--thw-line);
+}
+.thm-topbar::after{ /* 顶栏下沿一条金线,和画框同族 */
+  content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:var(--thm-gold-line);opacity:.5;
+}
+/* 8.18-3 缎带标题:圆缎带(左右收半圆),不用六边形硬切角 */
+.thm-title{
+  /* 主标题走 heading 档;字距 2.5px。书法档 --font-label 笔画细,再拉会散 */
+  font-family:var(--font-heading);
+  position:relative; font-size:17px; font-weight:800; letter-spacing:2.5px;
+  display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
+  padding:7px 20px; color:#7d3d52;
+  background:linear-gradient(180deg,#fffcfd,#ffeaf1 58%,#ffdce8);
+  border:1px solid color-mix(in srgb,var(--thm-gold-2) 44%,transparent);
+  border-radius:var(--thw-r-pill);
+  clip-path:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(190,120,140,.14),var(--thw-elev-contact);
+}
+.thm-title b{color:#d1436f;font-weight:800;}
+.thm-title::before{ /* 内嵌细线:跟着圆角走 */
+  content:'';position:absolute;inset:3px 9px;border-radius:var(--thw-r-pill);
+  border:1px solid rgba(217,154,148,.42);pointer-events:none;
+}
+/* 11.10-K3 缎带蝴蝶结 —— 缎带的那一处记忆点(8.1)。
+   ⚠ 「心」归 12.1 双击爆点,这里不许再用 —— 同一符号两处就不是记忆点。
+   ⚠ 耳用 border-radius 捏形,不用 clip-path:裁切基准在有 filter/contain 的祖先下会变(11.1-a)。 */
+.thm-bow{
+  position:relative; width:26px; height:15px; margin-left:-2px; flex:0 0 auto;
+  filter:drop-shadow(0 1px 1.5px rgba(190,120,140,.30));
+}
+.thm-bow i{ /* 两只耳 */
+  position:absolute; top:1px; width:11px; height:13px;
+  background:linear-gradient(160deg,#fff0f5,#ffc3d6 46%,#f79ab6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+}
+/* ⚠ 必须用 nth-of-type 而不是 last-child:结构是 <i><i><b>,末子是 <b>,
+   i:last-child 选不中任何东西 ⇒ 右耳退回 left:0、两只耳叠成一团。 */
+.thm-bow i:nth-of-type(1){
+  left:0; border-radius:80% 30% 55% 45% / 70% 40% 60% 40%;
+  transform:rotate(-8deg);
+}
+.thm-bow i:nth-of-type(2){
+  left:auto; right:0; border-radius:30% 80% 45% 55% / 40% 70% 40% 60%;
+  transform:rotate(8deg);
+}
+.thm-bow b{ /* 中间的结 */
+  position:absolute; left:50%; top:3px; width:8px; height:8px; margin-left:-4px;
+  border-radius:var(--thw-r-xs);
+  background:linear-gradient(180deg,#ffd9e6,#f28fae);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95);
+}
+/* 8-M8 你在这里胶囊 */
+.thm-here{
+  display:inline-flex; align-items:center; gap:8px; padding:5px 12px 5px 9px;
+  border-radius:var(--thw-r-pill); border:1px solid var(--thw-line);
+  background:linear-gradient(135deg,rgba(255,255,255,.9),var(--thw-soft));
+  box-shadow:var(--thw-elev-contact); font-size:12.5px; font-weight:700; cursor:pointer;
+  transition:transform var(--thm-t-micro) var(--thw-std),box-shadow var(--thm-t-micro) var(--thw-std);
+}
+.thm-here:hover{transform:translateY(-1px);box-shadow:var(--thw-elev-card);}
+.thm-here .dot{width:8px;height:8px;border-radius:50%;background:var(--thw-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--thw-accent) 26%,transparent);}
+/* 副行比主行轻靠字色降,不新开字重档 —— 600 在 11.5px 上和 700 分不出来 */
+.thm-here .rg{color:var(--thw-muted);font-weight:500;font-size:11.5px;}
+/* 13.2 胶囊那句是语气不是数据,压到 accent 淡色 + 小一档,不许抢地名 */
+.thm-here .mark{color:var(--thw-accent);font-weight:500;font-size:11px;letter-spacing:.3px;}
+.thm-spacer{flex:1;}
+/* 顶栏按钮三级。可爱靠形状(胶囊),互动感靠反馈幅度(抬 2px + 粉光圈 + 按压回弹) */
+.thm-btn{
+  cursor:pointer; border:1px solid var(--thw-line); border-radius:var(--thw-r-pill);
+  background:rgba(255,255,255,.74); color:var(--thw-text-2);
+  padding:6px 13px; font-size:12px; font-weight:700; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:5px; position:relative;
+  /* 静息态用 contact 档:16 阴影只许三档,自撰第四档就是越线 */
+  box-shadow:var(--thw-elev-contact);
+  transition:transform var(--thm-t-micro) var(--thw-std),background var(--thm-t-micro) var(--thw-std),
+             color var(--thm-t-micro) var(--thw-std),border-color var(--thm-t-micro) var(--thw-std),
+             box-shadow var(--thm-t-micro) var(--thw-std);
+}
+.thm-btn:hover{
+  transform:translateY(-2px); background:#fff; color:#8d3a55;
+  border-color:color-mix(in srgb,var(--thw-accent) 46%,transparent);
+  box-shadow:var(--thw-elev-contact),0 0 0 3px color-mix(in srgb,var(--thw-accent) 12%,transparent);
+}
+.thm-btn:active{transform:translateY(0) scale(.95);}
+.thm-btn:focus-visible{outline:2px solid color-mix(in srgb,var(--thw-accent) 70%,transparent);outline-offset:2px;}
+.thm-btn.on{
+  background:linear-gradient(135deg,var(--thw-accent),var(--thw-accent-2));color:#fff;border-color:transparent;
+  box-shadow:var(--thw-elev-contact),0 0 0 3px color-mix(in srgb,var(--thw-accent) 16%,transparent);
+}
+.thm-btn.on:hover{color:#fff;}
+/* 性能读数(8.12 档位可见)。等宽保留(读数要能对齐),字重收进 700 */
+.thm-perf{
+  font:700 10.5px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--thw-faint); border:1px dashed var(--thw-line-soft);
+  border-radius:var(--thw-r-sm); padding:4px 8px; white-space:pre;
+}
+.thm-perf b{color:var(--thw-text-2);font-weight:800;}
+.thm-perf.warn b{color:#d97706;}
+
+/* ---- 9 G 36 顶栏搜索 ---- */
+.thm-find{
+  display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 11px;
+  background:rgba(255,255,255,.6); border:1px solid var(--thw-line);
+  border-radius:var(--thw-r-pill); box-shadow:var(--thw-elev-contact);
+}
+.thm-find i{color:var(--thw-muted);font-size:11px;}
+.thm-find input{
+  border:0; outline:0; background:transparent; font:inherit; font-size:12px;
+  width:118px; color:var(--thw-text-2);
+}
+.thm-find input::placeholder{color:var(--thw-faint);}
+.thm-find:focus-within{
+  border-color:color-mix(in srgb,var(--thw-accent) 55%,transparent);
+  box-shadow:var(--thw-elev-contact),0 0 0 3px color-mix(in srgb,var(--thw-accent) 12%,transparent);
+}
+
+/* ---- 9 G 36 标签筛选下拉 ---- */
+.thm-tagwrap{position:relative;}
+.thm-tagpop{
+  position:absolute; top:calc(100% + 8px); left:0; z-index:41;
+  min-width:190px; max-width:340px; max-height:320px; overflow:auto;
+  background:linear-gradient(180deg,#fffdfb,#fff7ef);
+  border:1px solid var(--thw-line); border-radius:var(--thw-r-lg);
+  box-shadow:var(--thw-elev-float);
+}
+/* ⚠ display 只留给 :not([hidden]):直接写 display:flex 会盖掉 UA 的 [hidden]{display:none},关不掉。 */
+.thm-tagpop:not([hidden]){display:flex; flex-wrap:wrap; gap:6px; padding:9px;}
+.thm-tagchip{
+  cursor:pointer; font-size:11.5px; font-weight:700; padding:4px 11px;
+  border-radius:var(--thw-r-pill); background:var(--thw-soft);
+  border:1px solid var(--thw-line); color:var(--thw-text-2);
+  transition:background var(--thm-t-micro) var(--thw-std),color var(--thm-t-micro) var(--thw-std);
+}
+.thm-tagchip:hover{border-color:color-mix(in srgb,var(--thw-accent) 46%,transparent);color:#8d3a55;}
+.thm-tagchip.on{
+  background:color-mix(in srgb,var(--thw-accent) 62%,transparent);
+  color:#fff; border-color:transparent;
+}
+.thm-tagchip.empty{cursor:default;opacity:.6;color:var(--thw-faint);}
+
+/* ===== 视口 ===== */
+.thm-view{
+  position:relative; flex:1 1 auto; min-height:0; overflow:hidden;
+  cursor:grab; touch-action:none;
+}
+.thm-view.dragging{cursor:grabbing;}
+.thm-view::after{ /* 8.1b 全图噪点,压在最上层但不吃事件 */
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:30;
+  background-image:var(--thm-noise); opacity:.022; mix-blend-mode:multiply;
+}
+/* ⚠ 类名不能叫 .thm-stage,那个已被 11.9 的 L3 舞台占用。
+   ⚠ 不许在这枚上加 clip-path:祖先一裁,节点的 hover 卡与标签会被按裁剪区切掉。 */
+.thm-scroll{
+  position:absolute; inset:0; z-index:1;
+}
+/* 9.7 晕染转场:琉璃色从中心涨开盖住布局突变 */
+.thm-wash{
+  position:absolute; inset:0; z-index:31; pointer-events:none;
+  opacity:0; transform:scale(.2); border-radius:50%;
+  background:radial-gradient(circle at 50% 50%,
+    rgba(255,255,255,.92) 0%, var(--thm-sugar) 42%,
+    color-mix(in srgb,var(--thw-accent) 22%,transparent) 74%, transparent 100%);
+  filter:blur(14px);
+}
+.thm-wash.go{ animation:thmWash var(--thm-t-layer) var(--thw-std) forwards; }
+@keyframes thmWash{
+  0%  {opacity:0;   transform:scale(.2);}
+  38% {opacity:.86; transform:scale(1.5);}
+  100%{opacity:0;   transform:scale(2.2);}
+}
+.thm-tier1 .thm-wash{display:none;}
+
+/* ---- 云海三层视差 ----
+   ⚠ 呼吸的 y 挂在**容器**上,三层各自的 transform 归相机视差(9.10)独占:
+     同一属性两个写入方,后写的会整体顶掉前一个、且不报错。 */
+.thm-clouds{position:absolute;inset:-12% -12%;pointer-events:none;z-index:1;
+  animation:thmBwClouds var(--thm-t-breath) ease-in-out infinite;}
+.thm-cloud{
+  position:absolute; inset:0; background-repeat:repeat-x; background-position:center;
+  will-change:transform,opacity; opacity:0;
+}
+.thm-cloud.c1{background-size:auto 46%; background-position:center 74%; opacity:0;}
+.thm-cloud.c2{background-size:auto 34%; background-position:center 52%;}
+.thm-cloud.c3{background-size:auto 24%; background-position:center 30%;}
+.thm-shell.ready .thm-cloud.c1{opacity:.92;}
+.thm-shell.ready .thm-cloud.c2{opacity:.62;}
+.thm-shell.ready .thm-cloud.c3{opacity:.40;}
+.thm-cloud{transition:opacity .7s var(--thw-std),filter var(--thm-t-phase) var(--thw-std);}
+/* 6.2 金边云:同色系 drop-shadow 沿云形勾一道软光,替代描边(云图不规则,描边会断) */
+.thm-cloud.c1{filter:drop-shadow(0 -5px 12px var(--thm-cloud-rim));}
+.thm-cloud.c2{filter:drop-shadow(0 -4px 10px var(--thm-cloud-rim));}
+.thm-cloud.c3{filter:drop-shadow(0 -3px 8px var(--thm-cloud-rim));}
+/* 6.6 深夜专属:星野。night 相由 JS 给 .thm-shell 加 .night
+   ⚠ 落壳上不落 body:父页 body 不归地图管,写那儿会重染整个状态栏。 */
+.thm-stars{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;
+  background-image:
+    radial-gradient(1.4px 1.4px at 22% 30%,rgba(255,255,255,.9) 50%,transparent 51%),
+    radial-gradient(1.1px 1.1px at 58% 18%,rgba(255,255,255,.8) 50%,transparent 51%),
+    radial-gradient(1.6px 1.6px at 76% 44%,rgba(255,255,255,.85) 50%,transparent 51%),
+    radial-gradient(1px 1px at 38% 58%,rgba(255,255,255,.7) 50%,transparent 51%),
+    radial-gradient(1.3px 1.3px at 88% 22%,rgba(255,255,255,.8) 50%,transparent 51%),
+    radial-gradient(1px 1px at 12% 68%,rgba(255,255,255,.6) 50%,transparent 51%);
+  background-size:520px 460px,640px 560px,460px 520px,700px 600px,560px 500px,480px 540px;
+  transition:opacity 1.2s var(--thw-std);
+}
+.thm-shell.night .thm-stars{opacity:.5;}
+/* ---- 相机世界层:所有内容共享同一 transform(7 单相机)---- */
+.thm-world{
+  position:absolute; left:0; top:0; width:100%; height:100%;
+  transform-origin:0 0; z-index:5;
+  will-change:transform;
+}
+.thm-svg{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;}
+/* 岛台:主体统一糖霜白,只有描边和地名吃辖区色(8.1a 面积律)。
+   ⚠ url(#thmIsleFill) 这类**纯片段引用**在有 <base> 的宿主页会解析到 base 上而失效。
+      defs 与消费方在同一棵注入 DOM 里,交付前按 11.1-a 逐项点验。 */
+.thm-isle{
+  fill:url(#thmIsleFill);
+  stroke:var(--rg); stroke-width:2; stroke-opacity:.62;
+  transition:fill-opacity .3s var(--thw-std),stroke-opacity .3s var(--thw-std),filter var(--thm-t-phase) var(--thw-std);
+}
+.thm-isle-inner{
+  fill:rgba(255,255,255,.42);
+  stroke:var(--rg); stroke-width:1; stroke-opacity:.16; stroke-dasharray:5 7;
+}
+/* ===== 7 版图:加权 Voronoi 连体细胞 ===== */
+/* 7.1④ 细胞内部统一糖霜水彩,不填辖区色(4.1 面积律) */
+.thm-cell{stroke:none;transition:fill-opacity .3s var(--thw-std),filter var(--thm-t-phase) var(--thw-std);}
+/* 6.4 AO:一个 shape 盖全图,比逐细胞打光更"长在地上" */
+.thm-terra-ao{fill:rgba(150,90,110,.16);stroke:none;filter:url(#thmIsleAO);}
+/* 7.2 省界双边线:两条 1.5px 辖区色细线夹 2~3px 糖霜白缝 */
+.thm-brd{fill:none;stroke-linejoin:round;stroke-linecap:round;}
+/* 中间那道糖霜白缝只负责抹掉两块填充的生硬接缝,**不承担对比度**
+   —— 细胞填充已近 95% 亮度,纯白对它的对比度上限 1.09。双边线的"双"靠 insetRing。
+   ⚠ 宽度换算:内缩量 t ⇒ 线心距 2t ⇒ 目视白 = 2t − 1.5;白缝要盖到两条线的外沿
+     ⇒ 4.0 + 1.5 = 5.5,不能再收。 */
+.thm-brd-gap{stroke:#fff;stroke-width:8.25;opacity:1;}
+/* 不透明度必须 1.0:辖区色是给大面积填充调的粉彩,当细线画在糖霜底上几乎看不见。
+   深色描边由 JS 兑(inkColor),这里只留线宽/接头。 */
+.thm-brd-l{stroke-width:1.5;opacity:1;}
+/* 7.3 海岸线:连体版图外轮廓(海湾/岬角起伏),云海拍打岸边 */
+.thm-shore{fill:none;stroke:#f6ecec;stroke-width:3;stroke-linejoin:round;opacity:.95;}
+/* 6.5 版图外缘边缘光,亮度乘 4.4 全局光强。
+   ⚠ 禁加 transition:stroke-opacity 挂过渡后 Chrome 把值钉在起始数,calc 里的 var 不再重算。 */
+.thm-terra-rim{fill:none;stroke:var(--thm-rim);stroke-width:1.4;
+  stroke-opacity:calc(.55 * var(--thm-glow-lv,1));}
+/* 地名:8.5 禁描边 ⇒ 用卷轴卷面垫在字底下,不靠 stroke 撑对比 */
+.thm-isle-label{
+  /* 辖区名走书法档;地点标签仍走正文档 —— 书法体在 11px 上笔画会糊 */
+  font-family:var(--font-label);
+  fill:#6d3a4b; font-size:16px; font-weight:800; letter-spacing:5px;
+  opacity:.94; text-anchor:middle; dominant-baseline:middle;
+}
+.thm-isle-plate{fill:url(#thmScroll);stroke:rgba(217,154,148,.62);stroke-width:1;}
+.thm-isle-plate-line{stroke:rgba(217,154,148,.48);stroke-width:.8;fill:none;}
+/* 卷轴两端的轴头 */
+.thm-isle-rod{fill:url(#thmRod);stroke:rgba(168,106,112,.6);stroke-width:.8;}
+.thm-isle-rod-cap{fill:var(--rg);opacity:.55;}
+/* 路网:通道类地点画成路径,是第一个视觉钩子(8.2) */
+.thm-path{fill:none;stroke:rgba(255,255,255,.85);stroke-width:3.4;stroke-linecap:round;opacity:.7;}
+.thm-path-ink{fill:none;stroke:var(--rg);stroke-width:1.1;stroke-opacity:.30;stroke-linecap:round;}
+.thm-path.dash{stroke-dasharray:9 7;opacity:.5;}
+/* 7.5 细胞内部 hub↔main 的引路细线:极淡,平时几乎隐去。
+   区内连线只许一层素线(不给白底/不给流光),否则会盖过 7.5 要的那条路网骨架。 */
+.thm-guide{fill:none;stroke:var(--rg);stroke-width:1.2;stroke-linecap:round;opacity:.15;
+  transition:opacity .18s ease,stroke-width .18s ease;}
+.thm-guide.lit{opacity:.55;stroke-width:1.6;}
+
+/* ---- 节点(DOM,承载 CJK)---- */
+.thm-node{
+  position:absolute; transform:translate(-50%,-50%);
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  cursor:pointer; z-index:6; pointer-events:auto;
+  opacity:0; /* 由入场 stagger 打开 */
+}
+.thm-shell.ready .thm-node{opacity:1;transition:opacity .42s var(--thw-in),transform .2s var(--thw-drift);}
+/* ===== 11.1 地点节点(莲花灯 · 珐琅)=====
+   结构六件:珐琅水滴灯体 + 提环(::before) + 顶饰(.thm-crown) + 莲花座(.thm-lotus)
+   + 灯芯(.thm-dot) + 贴地椭圆投影(::after);右下另挂书签光片(.thm-bm)。
+   ⚠ 尺寸一律从 --pw/--ph 派生:11.1 有 6 处按比例取值,写死 px 就得改三档九处。
+   ⚠ 三档给的是灯体高 34/26/18,宽按 0.94 配比取整 ⇒ 32/24/17。 */
+.thm-pin{
+  position:relative; width:var(--pw); height:var(--ph);
+  --pw:17px; --ph:18px;                          /* 兜底:只给不带 data-tier 的引用用 */
+  display:grid; place-items:center;
+  transition:transform .18s var(--thw-std);
+}
+.thm-node[data-tier="hub"]  .thm-pin{--pw:32px; --ph:34px;}
+.thm-node[data-tier="main"] .thm-pin{--pw:24px; --ph:26px;}
+.thm-node[data-tier="sub"]  .thm-pin{--pw:17px; --ph:18px;}
+.thm-pin::after{ /* 贴地椭圆投影 —— 高度层的主承载(7.6-a②):
+     "离地越高 ⇒ 影子越大、越淡、越远、越糊",四量全 var 化交给五种材质各给一套。
+     ⚠ 不许无差别挂给所有灯:那等于把高度维度写死成"全都贴地"。 */
+  content:''; position:absolute; left:50%; pointer-events:none;
+  width:calc(var(--pw) * var(--sh-w,1.1)); height:calc(var(--ph) * var(--sh-h,.22));
+  margin-left:calc(var(--pw) * var(--sh-w,1.1) * -.5); bottom:calc(var(--ph) * var(--sh-y,-.13));
+  border-radius:50%; background:rgba(150,90,110,var(--sh-a,.18)); filter:blur(var(--sh-b,2px));
+}
+/* 高度层贴地影五套(7.6-a)。材质面已被 SVG 主体顶替,只剩影变量 ——
+   高度层视觉由 SVG 基线气质 + 这枚影双表达。 */
+.thm-pin{--sh-w:1.10;--sh-h:.22;--sh-y:-.13;--sh-a:.20;--sh-b:2px;}
+.thm-pin[data-mat="glass"]{--sh-w:1.30;--sh-h:.20;--sh-y:-.34;--sh-a:.13;--sh-b:3.4px;}
+.thm-pin[data-mat="thin"] {--sh-a:0;}
+.thm-pin[data-mat="jade"] {--sh-w:1.10;--sh-h:.22;--sh-y:-.13;--sh-a:.20;--sh-b:2px;}
+.thm-pin[data-mat="frost"]{--sh-a:0;}
+.thm-pin[data-mat="shard"]{--sh-w:1.06;--sh-h:.16;--sh-y:-.10;--sh-a:.10;--sh-b:2.6px;}
+/* O1 辖区顶饰:线稿 SVG 由 JS 按 rg×alt 生成(CROWN_P/CROWN_ALT),CSS 只给壳。
+   ⚠ color 是玫瑰金,不上辖区色:它的职责是"不看色也猜得出归属"(4.1 面积律)。
+   ⚠ 尺寸不随三档等比缩,给近似定值 11/9.5/8:sub 灯体只 17px,等比会落到 5.8px,
+      线稿在 5px 上糊成一点。 */
+.thm-crown{
+  position:absolute; left:0; top:0; width:100%; height:100%;
+  pointer-events:none; color:rgba(196,128,132,.92);
+  display:grid; place-items:center;
+}
+.thm-crown-svg{width:100%; height:100%; display:block;}
+/* 灯芯:图标底部居中一枚辖区色小点(4.1 面积律,辖区色只在这里)。
+   ⚠ 位置贴 SVG 底部,不占图标主体;深夜亮度乘 --thm-wick-lv(4.4)。 */
+.thm-dot{
+  position:absolute; left:50%; bottom:calc(var(--ph) * .10);
+  width:calc(var(--ph) * .22); height:calc(var(--ph) * .22);
+  margin-left:calc(var(--ph) * -.11);
+  border-radius:50%; background:var(--rg);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.75),
+             0 0 6px color-mix(in srgb,var(--rg) calc(46% * var(--thm-wick-lv,.7) / .7),transparent);
+}
+/* 悬停/按压(8.7) */
+.thm-node:hover{z-index:12;}
+.thm-node:hover .thm-pin{transform:translateY(-2px) scale(1.10);}
+.thm-node:hover .thm-crown-svg{filter:drop-shadow(0 2px 3px rgba(150,90,110,.35));}
+.thm-node:active .thm-pin{transform:translateY(0) scale(.94);}
+/* ---- 标签(11.3):圆角半透小卡,禁描边(CJK 加 text-stroke 会糊)---- */
+.thm-label{
+  position:relative;
+  font-size:11.5px; font-weight:700; line-height:1.3; white-space:nowrap;
+  letter-spacing:.5px; color:#54323f;
+  background:linear-gradient(180deg,rgba(255,254,253,.95),rgba(255,246,247,.88));
+  /* 玻璃感只许靠上面那条渐变:地图段已整段弃用 backdrop-filter(14a)。 */
+  border-radius:var(--thw-r-sm); padding:3px 10px;
+  border:1px solid color-mix(in srgb,var(--thm-gold-2) 26%,transparent);
+  border-bottom-color:color-mix(in srgb,var(--thm-gold-2) 46%,transparent);
+  clip-path:none;
+  /* 投影用 contact 档(16 三档制),别自撰第四档 */
+  box-shadow:0 2px 8px rgba(150,90,110,.10),inset 0 1px 0 rgba(255,255,255,.9);
+  /* 反缩放:相机缩小时把字撑回来,屏幕上恒定 ~11.5px(8.5 可读性) */
+  transform:scale(var(--lblk,1)); transform-origin:top center;
+  transition:opacity .2s var(--thw-std),box-shadow .18s var(--thw-std),border-color .18s var(--thw-std);
+}
+/* 互动感:悬停时标签自己也亮一下,让"这一枚被指着"更明确 */
+.thm-node:hover .thm-label{
+  border-color:color-mix(in srgb,var(--thw-accent) 40%,transparent);
+  box-shadow:0 3px 9px rgba(150,90,110,.16),inset 0 1px 0 #fff,0 0 0 2px color-mix(in srgb,var(--thw-accent) 10%,transparent);
+}
+.thm-label .sub{font-weight:500;font-size:10px;color:var(--thw-muted);margin-left:4px;}
+.thm-node.lbl-hide .thm-label{opacity:0;}
+.thm-node[data-tier="hub"] .thm-label{font-size:12.5px;}
+/* 11.2 书签光片(8.16 三态):柔金 6×9 小片,挂节点右下。三态一律靠形状分:
+     on = 实心(下端仍留书签燕尾口,这是"书签"的形,不是状态位)
+     part = 缺右下角 45° 斜切 + opacity .55
+     off = 根本不挂(JS 不建这枚元素)
+   ⚠ 最易错是给三态上不同颜色 ⇒ 这里没有第二种颜色:只有 clip-path 和 opacity 在变。
+   ⚠ 位置在右下不在底部居中:居中那版正好压在莲花座中瓣上,眯眼看是一团。 */
+/* ⚠ 几何只此一处,地图节点与列表卡片共用(8.16);摆位各自写 */
+.thm-bm, .th-bm{
+  width:6px; height:9px; border-radius:1.5px 1.5px 0 0;
+  background:linear-gradient(180deg,#ffd88a,#f0ae4e);
+  clip-path:polygon(0 0,100% 0,100% 100%,50% 74%,0 100%);
+  box-shadow:0 0 6px rgba(255,196,110,.85);
+}
+.thm-bm{
+  position:absolute; right:calc(var(--pw) * -.10); bottom:calc(var(--ph) * .02);
+}
+/* 部分绑定:右下角再削一块 45°(轮廓一眼不同) */
+.thm-bm[data-st="part"], .th-bm[data-st="part"]{
+  clip-path:polygon(0 0,100% 0,100% 52%,58% 100%,50% 78%,0 100%);
+  opacity:.55;
+}
+/* 当前位置:光柱 + 涟漪 + 上升粒子(8.3-3)。
+   ⚠ 涟漪与上升粒子两个降级档都不许停 —— 它们是"找自己"的语义件(3 铁律2)。 */
+.thm-node.cur{z-index:14;}
+.thm-beam{
+  position:absolute; left:50%; bottom:2px; transform:translateX(-50%);
+  width:26px; height:120px; pointer-events:none;
+  background:linear-gradient(to top,color-mix(in srgb,var(--thw-accent) 55%,transparent),transparent 78%);
+  filter:blur(3px);
+  opacity:.75;                               /* 9.3 相位 .30 */
+  animation:thmBwBeam var(--thm-t-breath) ease-in-out infinite;
+  mask-image:linear-gradient(to top,#000,transparent);
+}
+.thm-halo{
+  position:absolute; left:50%; top:50%; width:54px; height:22px; margin:-11px 0 0 -27px;
+  border-radius:50%; border:1.5px solid color-mix(in srgb,var(--thw-accent) 62%,transparent);
+  opacity:0; pointer-events:none;
+  animation:thmHalo 3.6s var(--thw-std) infinite;
+}
+.thm-halo.d2{animation-delay:1.8s;}
+@keyframes thmHalo{0%{transform:scale(.5);opacity:.85;}100%{transform:scale(2.1);opacity:0;}}
+.thm-mote{
+  position:absolute; left:50%; bottom:6px; width:3px; height:3px; border-radius:50%;
+  background:color-mix(in srgb,var(--thw-accent) 70%,#fff); pointer-events:none;
+  animation:thmMote 4s linear infinite;
+}
+@keyframes thmMote{
+  0%{transform:translate(-50%,0) scale(.6);opacity:0;}
+  18%{opacity:.9;}
+  100%{transform:translate(calc(-50% + var(--dx,6px)),-72px) scale(.3);opacity:0;}
+}
+/* 12.2 花柱:光柱上缠花藤。六枚小花沿柱螺旋,单枚只做"明灭 + 微升"。
+   ⚠ 六枚 delay 必须逐枚错开半圈(JS `phaseLock` 发):同 delay 会把螺旋读成"一圈同时闪"。 */
+.thm-vine{
+  position:absolute; left:50%; bottom:6px; width:7px; height:7px; pointer-events:none;
+  font-size:7px; line-height:1; color:color-mix(in srgb,var(--thw-accent) 72%,#fff);
+  transform:translate(calc(-50% + var(--vx,0px)),calc(var(--vy,-10px) - 1.5px)) scale(.86);
+  opacity:calc(var(--vo,.9) * .67);
+  animation:thmBwVine var(--thm-t-breath) ease-in-out infinite;
+}
+.thm-vine::before{content:'❀';}
+/* 12.5 节庆挂彩:相关地点右上角一枚小灯笼(辖区色系),随节庆表显隐。
+   ⚠ 挂 .thm-pin 不挂 .thm-node:节点是 flex 列,挂节点上会被当成第四个 flex 子项把灯体挤歪。 */
+.thm-fest{
+  position:absolute; top:-4px; right:-7px; width:7px; height:10px; pointer-events:none;
+  border-radius:var(--thw-r-xs);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--rg) 55%,#fff),color-mix(in srgb,var(--rg) 82%,#e08a86));
+  box-shadow:0 0 6px color-mix(in srgb,var(--rg) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.8);
+}
+.thm-fest::before{ /* 提绳 + 顶盖 */
+  content:''; position:absolute; left:50%; top:-3px; width:1px; height:3px; margin-left:-.5px;
+  background:var(--thm-gold-2);
+}
+.thm-fest::after{ /* 底部流苏 */
+  content:''; position:absolute; left:50%; bottom:-3px; width:1px; height:3px; margin-left:-.5px;
+  background:var(--thm-gold-2); opacity:.8;
+}
+/* 12.6-P2 极光:仅深夜,conic 柔光 opacity .08(6.6 定数),常驻但极淡 */
+.thm-aurora{
+  position:absolute; left:-10%; top:-6%; width:120%; height:46%; z-index:1; pointer-events:none;
+  opacity:0; transition:opacity var(--thm-t-phase) var(--thw-std);
+  background:conic-gradient(from 200deg at 50% 120%,transparent,#8fe6d0 18%,transparent 34%,#b9a6f0 52%,transparent 70%);
+  filter:blur(26px);
+}
+.thm-shell.night .thm-aurora{opacity:.08;}
+/* 12.6-P3 雨后彩虹:条件触发不常驻 —— 天气由雨转晴后短暂出现一道淡弧。
+   判据是"雨→晴"这次转变(prevWeather),不是"当前是晴" —— 后者会变成常驻装饰。 */
+.thm-rainbow{
+  position:absolute; left:8%; top:4%; width:56%; aspect-ratio:2/1; z-index:2; pointer-events:none;
+  border-radius:50% 50% 0 0 / 100% 100% 0 0;
+  border:7px solid transparent; opacity:0;
+  background:conic-gradient(from 270deg,#ffb3c6,#ffd694,#b8ead9,#aecdf2,#d3b8f5) border-box;
+  mask-image:linear-gradient(#000,#000),linear-gradient(#000,#000);
+  mask-clip:padding-box,border-box; mask-composite:exclude;
+  transition:opacity 1.2s var(--thw-std);
+}
+.thm-rainbow.show{opacity:.34;}
+/* 4.5 天气:只动"整体亮度 / 路网流光 / 节点表面"三个全局量。
+   整体亮度走一层薄纱而不是 filter:brightness —— filter 会给所有后代新建包含块与层叠上下文。
+   ⚠ z 必须落 28:压在版图与节点之上、暗角(29)与 UI(35+)之下。放低只染天幕和云等于没做;
+     放到 35 以上会把顶栏/罗盘/图例一起染上雨色。 */
+.thm-wx{position:absolute;inset:0;z-index:28;pointer-events:none;transition:background var(--thm-t-phase) var(--thw-std);}
+.thm-shell[data-weather="rain"]  .thm-wx{background:rgba(122,142,182,.08);}   /* −8% 偏冷 */
+.thm-shell[data-weather="snow"]  .thm-wx{background:rgba(255,255,255,.06);}   /* +6% 偏白 */
+/* 节点表面:走 box-shadow 末位的 --m-wx 槽。
+   ⚠ 不许占 --m-tex(那槽是高度层材质,承重件不给氛围件让位),也不许开伪元素(两个都已占满)。 */
+.thm-shell[data-weather="rain"] .thm-pin{--m-wx:inset 0 2px 5px rgba(150,180,225,.30);}
+.thm-shell[data-weather="snow"] .thm-pin{--m-wx:inset 0 -3px 6px rgba(255,255,255,.34);}
+/* 3 降级联动:档1 收远景层与呼吸。
+   ⚠ 涟漪与上升粒子(L-中6)不在降级范围:它们是"找自己"的语义件,不许停。 */
+.thm-tier1 .thm-aurora{display:none;}
+/* ---- 8.13 星团聚合 ---- */
+.thm-cluster{
+  position:absolute; transform:translate(-50%,-50%); cursor:pointer; z-index:8;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+}
+.thm-cluster-bub{
+  min-width:38px; height:38px; padding:0 8px; border-radius:var(--thw-r-pill);
+  display:grid; place-items:center; font-size:13px; font-weight:800; color:var(--thw-text);
+  background-color:rgba(255,255,255,.78);
+  background-image:linear-gradient(158deg,rgba(255,255,255,.95),color-mix(in srgb,var(--rg) 16%,rgba(255,255,255,.6))),var(--thm-noise);
+  border:1.5px solid color-mix(in srgb,var(--rg) 42%,transparent);
+  box-shadow:var(--thw-elev-contact);
+  transition:transform .18s var(--thw-std),box-shadow .18s var(--thw-std);
+}
+.thm-cluster:hover .thm-cluster-bub{transform:translateY(-2px) scale(1.08);box-shadow:var(--thw-elev-card);}
+.thm-cluster-cap{font-size:10.5px;font-weight:700;color:var(--thw-text-2);background:rgba(255,255,255,.7);border-radius:var(--thw-r-sm);padding:1px 6px;}
+
+.thm-av{
+  width:20px;height:20px;border-radius:50%;font-size:9.5px;font-weight:800;color:#fff;
+  /* 投影走 contact 档:16 只许三档 */
+  display:grid;place-items:center;box-shadow:0 2px 8px rgba(150,90,110,.10);
+}
+/* ---- 左下缩放条 ---- */
+.thm-zoom{
+  position:absolute; left:26px; bottom:26px; z-index:35;
+  display:flex; flex-direction:column; gap:2px; padding:5px;
+  background:linear-gradient(180deg,rgba(255,253,248,.9),rgba(255,247,238,.8));
+  border:1px solid color-mix(in srgb,var(--thm-gold-2) 40%,transparent); border-radius:var(--thw-r-md);
+  box-shadow:var(--thw-elev-card);
+}
+.thm-zoom button{
+  cursor:pointer; width:30px; height:26px; border:none; background:transparent;
+  color:var(--thw-text-2); font-size:14px; font-weight:800; border-radius:var(--thw-r-sm);
+  transition:background var(--thm-t-micro) var(--thw-std),color var(--thm-t-micro) var(--thw-std);
+}
+.thm-zoom button:hover{background:var(--thw-soft);color:var(--thw-accent);}
+.thm-zoom .lv{font:700 10px/1 ui-monospace,monospace;color:var(--thw-faint);text-align:center;padding:3px 0;}
+
+/* ---- 8.8 编辑模式:降饱和 + 网格 + 把手 ---- */
+.thm-view.edit .thm-world{filter:saturate(.45);}
+.thm-grid{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .3s var(--thw-std);
+  background-image:linear-gradient(rgba(120,100,150,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(120,100,150,.16) 1px,transparent 1px);
+  background-size:48px 48px;}
+.thm-view.edit .thm-grid{opacity:1;}
+.thm-view.edit .thm-node .thm-pin{outline:1.5px dashed color-mix(in srgb,var(--thw-accent) 60%,transparent);outline-offset:4px;}
+.thm-view.edit{cursor:default;}
+/* ---- 左侧竖切面丝带(7.6②:L1 常驻 + hover 预览 + 点击锁定)----
+   形态是一根地质剖面:五段自上而下 = 极高空/悬浮/常规/地下/边缘,段高按该层地点数占比分,
+   所以种子表扩容后自动重新分段,不写死高度。段内色板直接复用 .thm-pin 的材质配方。 */
+.thm-ribbon{
+  /* ⚠ 必须顶对齐 + 给底部三件预留高度,不许 top:50%+translateY 居中:
+     图例/缩放条是底对齐的,且丝带的 x 区间与图例本来就重叠 ⇒ 视口一矮就是真遮挡。
+     132px 起是避开左上角花角(58×58);下边留 290px = 图例 150+128 再留 12 空隙。 */
+  position:absolute; left:16px; top:132px; z-index:35;
+  height:min(420px,calc(100% - 132px - 290px)); min-height:120px;
+  width:34px; display:flex; flex-direction:column;
+  padding:5px; gap:3px; border-radius:var(--thw-r-md);
+  background:linear-gradient(180deg,rgba(255,253,248,.86),rgba(255,247,238,.76));
+  border:1px solid color-mix(in srgb,var(--thm-gold-2) 38%,transparent);
+  box-shadow:var(--thw-elev-contact);
+}
+.thm-ribbon .rbb{                                 /* 一段 = 一个高度带 */
+  position:relative; flex:0 0 auto; min-height:18px;
+  border-radius:var(--thw-r-xs); cursor:pointer; overflow:hidden;
+  display:grid; place-items:center;
+  background:color-mix(in srgb,var(--rbc) 26%,transparent);
+  border:1px solid color-mix(in srgb,var(--rbc) 40%,transparent);
+  transition:background .18s var(--thw-std),box-shadow .18s var(--thw-std),transform .18s var(--thw-std);
+}
+.thm-ribbon .rbb::before{                         /* 左侧材质色条:窄,只作身份标 */
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--rbc);
+}
+.thm-ribbon .rbb .rbn{                            /* 该层地点数,等宽数字(8.2) */
+  font:700 9px/1 ui-monospace,SFMono-Regular,Consolas,monospace;
+  color:var(--thw-text-2); letter-spacing:.5px; pointer-events:none;
+}
+.thm-ribbon .rbb:hover{background:color-mix(in srgb,var(--rbc) 44%,transparent);transform:translateX(2px);}
+.thm-ribbon .rbb.on{                              /* 锁定态:金环 + 加深,对上 7.6"当前筛选层亮" */
+  background:color-mix(in srgb,var(--rbc) 56%,transparent);
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--thm-gold-2) 82%,transparent);
+}
+.thm-ribbon .rbt{                                 /* 顶部刻度标题 —— 8.2 禁竖排文字,所以用符号 */
+  flex:0 0 auto; text-align:center; font-size:9px; font-weight:800;
+  color:var(--thw-faint); letter-spacing:1px; padding-bottom:2px;
+}
+/* 筛选态:只调 opacity,不删 DOM(7.6② 明写)。dim 的节点仍可点,免得筛选把地图变只读。
+   ⚠ transition-delay 必须显式归零:节点身上带着入场 stagger 的 inline delay(最远一档 200ms+),
+     不清掉的话每次切带都要先卡一下才开始淡。 */
+.thm-nodes[data-alt-focus] .thm-node{opacity:.16;transition:opacity .2s var(--thw-std);transition-delay:0s;}
+.thm-nodes[data-alt-focus="high"]   .thm-node[data-alt="high"],
+.thm-nodes[data-alt-focus="float"]  .thm-node[data-alt="float"],
+.thm-nodes[data-alt-focus="ground"] .thm-node[data-alt="ground"],
+.thm-nodes[data-alt-focus="under"]  .thm-node[data-alt="under"],
+.thm-nodes[data-alt-focus="edge"]   .thm-node[data-alt="edge"]{opacity:1;transition-delay:0s;}
+
+/* P3-收缩 hover 飞出卡:屏幕层(挂 view 下),文字恒定像素不随相机缩放。
+   定位由 applyCam 换算节点世界坐标,JS 里同步 left/top。 */
+.thm-fly{
+  position:absolute; left:0; top:0; z-index:40; pointer-events:none;
+  display:flex; flex-direction:column; gap:3px;
+  max-width:210px; padding:8px 11px; border-radius:12px;
+  background:linear-gradient(160deg,#fdf9fb,#f4edf1);
+  border:1px solid #e9dce2; box-shadow:0 4px 16px rgba(150,90,110,.18);
+  opacity:0; transform:translate(20px,-50%) scale(.94);
+  transform-origin:left center; transition:opacity .16s var(--thw-std),transform .16s var(--thw-std);
+}
+.thm-fly.show{opacity:1;transform:translate(20px,-50%) scale(1);}
+.thm-fly-name{font-size:13px;font-weight:700;color:var(--thw-text-1, #5a4450);}
+.thm-fly-env{font-size:11px;line-height:1.45;color:var(--thw-text-2, #7a6a72);}
+
+/* 9 G 36 标签筛选压暗 —— 走 class 不定 DOM,节点仍可点(同 7.6②)。 */
+.thm-node.thm-off{opacity:.13;transition:opacity .2s var(--thw-std);transition-delay:0s;}
+/* 搜索命中的闪环 */
+.thm-node.flash::after{
+  content:''; position:absolute; left:50%; top:50%; width:36px; height:36px; margin:-18px;
+  border-radius:50%; border:2px solid var(--thw-accent); pointer-events:none;
+  animation:thm-flash-ring .9s var(--thw-std) forwards;
+}
+@keyframes thm-flash-ring{
+  0%{transform:scale(.4);opacity:0;}
+  30%{opacity:.95;}
+  100%{transform:scale(1.9);opacity:0;}
+}
+
+.thm-editbar{
+  position:absolute; left:50%; bottom:16px; transform:translate(-50%,140%); z-index:36;
+  display:flex; align-items:center; gap:8px; padding:8px 12px;
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.8));
+  border:1px solid var(--thw-line);
+  border-radius:var(--thw-r-lg); box-shadow:var(--thw-elev-float);
+  transition:transform .3s var(--thw-in);
+}
+.thm-view.edit .thm-editbar{transform:translate(-50%,0);}
+.thm-editbar span{font-size:11.5px;font-weight:700;color:var(--thw-text-2);}
+/* ---- 8.17 L3 分镜卡 ---- */
+.thm-l3{
+  position:absolute; inset:0; z-index:70; display:none;
+  background:rgba(40,30,52,.28);
+  align-items:center; justify-content:center; padding:22px;
+}
+.thm-l3.show{display:flex;}
+/* L3 = 横版 galgame 视角(计划 9-D):立绘全幅当舞台,卡本身就是那张 16:9 图,
+   顶栏/热点/动词/对话框全部浮在图上 —— 图是主角、UI 是叠层。
+   ⚠ 别堆成"立绘条 + 顶栏 + 三栏 body + 底栏"那种上下四盒:那读起来是操作台。 */
+.thm-l3-card{
+  position:relative;
+  width:min(1180px,100%); aspect-ratio:16/9; max-height:100%; overflow:hidden;
+  /* ⚠ 对话框高度只许由内容定(舞台吃 flex:1):写死高度会与舞台争高 */
+  display:flex; flex-direction:column;
+  background:linear-gradient(180deg,rgba(255,253,248,.97),rgba(253,246,236,.94));
+  border:1px solid color-mix(in srgb,var(--thm-gold-2) 52%,transparent); border-radius:var(--thw-r-md);
+  box-shadow:var(--thw-elev-card);
+  opacity:0; transform:scale(.94) translateY(10px);
+  transition:opacity .26s var(--thw-in),transform .34s var(--thw-drift);
+}
+.thm-l3.show .thm-l3-card{opacity:1;transform:none;}
+/* 卡内一圈细金线,和画框同族。z 要压过舞台,不然被立绘盖掉 */
+.thm-l3-card::after{
+  content:''; position:absolute; inset:5px; border-radius:var(--thw-r-sm); pointer-events:none;
+  border:1px solid rgba(217,154,148,.40); z-index:5;
+}
+/* 11.10-K2 蕾丝花边:全图只此一处,挂 L3 卡顶缘内侧,不挂 hover 卡
+   (hover 卡只有 248px 宽,花边会挤掉那三行字)。
+   ⚠ 用 radial-gradient 平铺而不是画 N 个 <i>:垛口数量得跟着卡宽变,写死个数窄窗会缺。
+   ⚠ z 必须 >5 才压得过上面那圈金线,否则金线横穿花边像划了一刀。 */
+.thm-l3-card::before{
+  content:''; position:absolute; left:6px; right:6px; top:6px; height:7px;
+  pointer-events:none; z-index:6; opacity:.55;
+  background:
+    radial-gradient(circle at 5px 0, transparent 4.4px, rgba(255,255,255,.95) 4.6px 5.4px, transparent 5.6px);
+  background-size:10px 7px; background-repeat:repeat-x;
+  filter:drop-shadow(0 1px .5px rgba(190,120,140,.18));
+}
+/* 立绘位:铺满整卡(不再是顶部一条)。无图时 = 云纹分镜框 + 关键词(8.6) */
+.thm-l3-art{
+  position:absolute; inset:0; z-index:0; overflow:hidden;
+  background-color:color-mix(in srgb,var(--rg) 12%,#fff);
+  background-image:linear-gradient(150deg,rgba(255,255,255,.9),color-mix(in srgb,var(--rg) 24%,rgba(255,255,255,.5))),var(--thm-noise);
+}
+.thm-l3-art img{width:100%;height:100%;object-fit:cover;display:block;}
+.thm-l3-art::before{
+  content:''; position:absolute; inset:14px; border:1px solid color-mix(in srgb,var(--rg) 42%,transparent);
+  border-radius:var(--thw-r-md); opacity:.55;
+  mask-image:repeating-linear-gradient(90deg,#000 0 22px,transparent 22px 34px);
+}
+/* 占位关键词:横排(8.5 永不竖排)。
+   ⚠ 必须挂在 .thm-stage 里而不是卡根:挂卡根时 inset:0 按整卡居中,占位字会沉到对话框底下。 */
+.thm-l3-kw{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  gap:20px; font-size:30px; font-weight:800; letter-spacing:8px;
+  color:color-mix(in srgb,var(--rg) 62%,var(--thw-text)); opacity:.30;
+  writing-mode:horizontal-tb; pointer-events:none; z-index:0;
+}
+.thm-l3-artnote{position:absolute;right:14px;top:52px;font-size:10.5px;font-weight:700;color:var(--thw-faint);background:rgba(255,255,255,.7);border-radius:var(--thw-r-sm);padding:2px 7px;z-index:4;}
+/* 顶栏:浮在立绘上的一条玻璃(底色渐隐进立绘,硬边框会又变回"框") */
+.thm-l3-head{
+  position:relative; z-index:4; flex:0 0 auto;
+  display:flex; align-items:center; gap:10px; padding:9px 14px;
+  background:linear-gradient(180deg,rgba(255,252,247,.92),rgba(255,250,243,.62) 74%,transparent);
+}
+/* 8.2 L3 渐变描金字:全图唯一一处,给 L3 主标题(地点全名)。
+   ⚠ 别把它借给顶栏标题或辖区名 —— 多一处就"像红包",这是规范点名的定数。
+   ⚠ background-clip:text + color:transparent 会让字没有可回退的颜色:
+     渐变一旦不生效(某些 sanitizer 会剥 -webkit- 前缀)就是一行看不见的字。
+     故先给 color 一个实色兜底,再用 @supports 确认能裁字才转 transparent。 */
+.thm-l3-head h3{
+  margin:0; font-size:16.5px; font-weight:800;
+  font-family:var(--font-label); letter-spacing:1.5px;
+  color:#8d4a52;
+}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .thm-l3-head h3{
+    background:var(--thm-gold-text);
+    -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent;
+    /* 描金字自带一点厚度:纯渐变字在浅底上会发飘 */
+    filter:drop-shadow(0 1px 0 rgba(255,255,255,.75));
+  }
+  /* 别名副行不跟着变金:金字只给 h3 自己那段文本 */
+  .thm-l3-head h3 .path{
+    -webkit-text-fill-color:var(--thw-muted); color:var(--thw-muted);
+    background:none; filter:none;
+  }
+}
+.thm-l3-head .path{font-size:11px;color:var(--thw-muted);font-weight:500;}
+/* 舞台:顶栏与对话框之间那片区域。三条带(看/独有/用)用 space-around 自己分,
+   不靠 JS 算坐标 —— 条数从 1 到 10 都不会撞带,222 地各不相同也不用改常量。 */
+.thm-stage{
+  position:relative; z-index:3; flex:1; min-height:0;
+  display:flex; flex-direction:column; justify-content:space-around;
+  padding:4px 26px; gap:4px; overflow:hidden;
+}
+/* 带要压在占位关键词之上:kw 是绝对定位(自带层),静态兄弟会被它盖住,所以显式给层 */
+.thm-band{position:relative; z-index:1; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:7px 16px;}
+/* 「看」组独占一整行,排在可用项之下(flex-basis:100% 逼它换行),这一行自己也居中。 */
+.thm-looks{flex:0 0 100%; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:7px;}
+/* 分时段场景文本:打字机 + 首字下沉(11.9 / 8.2 L2)。
+   打字机只动 textContent,不动布局:min-height 先按两行占住,免得逐字打的时候整卡抖。 */
+.thm-l3-scene{
+  /* 8.2 正文行高 = 1.75(定数,与规则浮层/预览条同值)。
+     ⚠ min-height 必须由同一个数算出来,写死成别的会和实际行高错开 ⇒ 打字机跑起来就抖。 */
+  position:relative; font-size:12.5px; font-weight:500; line-height:1.75; color:var(--thw-text-2);
+  min-height:calc(12.5px * 1.75 * 2); cursor:pointer;
+}
+.thm-l3-scene::first-letter{
+  font-size:26px; font-weight:700; line-height:1; float:left;
+  margin:2px 5px 0 0; color:color-mix(in srgb,var(--rg) 62%,var(--thw-text));
+}
+.thm-l3-scene.typing::after{
+  content:''; display:inline-block; width:1px; height:1em; margin-left:2px;
+  background:var(--thw-accent); vertical-align:-2px; animation:thmCaret 1s steps(1) infinite;
+}
+@keyframes thmCaret{50%{opacity:0;}}
+/* 「点一下跳过」提示:字只写一次、显隐交给 opacity。
+   JS 清 textContent 会让那行高度塌成 0,把预览条顶得上下动 —— 预览条是全场主角控件。 */
+.thm-l3-skip{
+  font-size:10px; font-weight:500; color:var(--thw-faint);
+  opacity:0; transition:opacity .18s var(--thw-std);
+}
+.thm-l3-scene.typing + .thm-l3-skip{opacity:1;}
+/* 「用」= 固定设施,落在立绘上的热点(呼吸微光 + 局部提亮),不再是左栏列表行。
+   药丸底只给很淡的一层,免得盖住图。 */
+.thm-hot{
+  cursor:pointer; border:1px solid color-mix(in srgb,#fff 62%,transparent); border-radius:var(--thw-r-pill);
+  background:rgba(255,252,247,.62);
+  padding:5px 11px 5px 8px; font-size:12px; font-weight:700; color:var(--thw-text-2);
+  display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+  box-shadow:var(--thw-elev-contact);
+  transition:transform var(--thm-t-micro) var(--thw-std),background var(--thm-t-micro) var(--thw-std),box-shadow var(--thm-t-micro) var(--thw-std);
+}
+.thm-hot:hover{transform:translateY(-2px);background:#fff;box-shadow:var(--thw-elev-card);}
+.thm-hot.on{background:linear-gradient(135deg,var(--thw-accent),var(--thw-accent-2));color:#fff;border-color:transparent;}
+/* 热点的光点:呼吸微光。9.3 相位 .80(与铭牌同相),周期只从 --thm-t-breath 取 */
+.thm-hot i{
+  width:7px; height:7px; border-radius:50%; background:var(--rg); flex:0 0 auto;
+  box-shadow:0 0 6px color-mix(in srgb,var(--rg) 72%,transparent);
+  opacity:.775; transform:scale(1);
+  animation:thmBwHot var(--thm-t-breath) ease-in-out infinite;
+}
+.thm-hot.on i{background:#fff;box-shadow:0 0 6px rgba(255,255,255,.9);}
+/* 规则 chips = 印章 / 封条(8.17) */
+.thm-seals{display:flex;flex-wrap:wrap;gap:6px;}
+/* 卡头世界书开关:三态靠 data-st,开=描金实心 / 未开=描边 / unknown=注册表查不到 */
+.thm-wbsw{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:5px;
+  font-size:11.5px; font-weight:700; letter-spacing:.3px; padding:4px 9px;
+  font-family:var(--font-label); cursor:pointer;
+  border-radius:var(--thw-r-sm); border:1px solid var(--thw-line);
+  background:var(--thw-soft); color:var(--thw-muted);
+  transition:background .16s,color .16s,border-color .16s;
+}
+.thm-wbsw:hover{filter:brightness(1.05);}
+.thm-wbsw:focus-visible{outline:2px solid color-mix(in srgb,var(--thw-accent) 70%,transparent);outline-offset:2px;}
+.thm-wbsw b{
+  font-weight:800; font-size:10px; padding:0 4px; border-radius:999px;
+  background:color-mix(in srgb,currentColor 18%,transparent);
+}
+.thm-wbsw[data-st="on"]{
+  color:#8a5a10; border-color:color-mix(in srgb,#f0ae4e 58%,transparent);
+  background:linear-gradient(180deg,rgba(255,244,220,.96),rgba(255,232,192,.9));
+  box-shadow:0 0 8px rgba(255,196,110,.4);
+}
+.thm-wbsw[data-st="unknown"]{color:var(--thw-faint);}
+/* 11.7 定数:朱砂红 #d9534a / border 1.5px / radius 3px / 噪点 .15 / rotate(-2deg)。
+   朱砂红是全图独占色,只许出现在印章上,别处一律不许引用。
+   ⚠ 字重取 700 而非 11.7 写的 600:8.2 通则"字重只用 500/700"管着所有组件,
+     通则压组件定数,不然全场字重会多冒出一档。 */
+.thm-seal{
+  font-size:11px; font-weight:700; letter-spacing:.6px; padding:4px 9px;
+  color:#d9534a; background:linear-gradient(135deg,rgba(255,244,242,.95),rgba(255,230,226,.85));
+  border:1.5px solid color-mix(in srgb,#d9534a 46%,transparent); border-radius:3px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.7);
+  position:relative; transform:rotate(-2deg); overflow:hidden;
+}
+.thm-seal:nth-child(even){transform:rotate(1.4deg);}
+/* 印泥的糙感:8.1b 全图唯一那张噪点,这里给 .15 */
+.thm-seal::before{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background-image:var(--thm-noise); opacity:.15; mix-blend-mode:multiply;
+}
+/* 章内虚线:半径只许取 8.15 白名单里的值。几何上该配 1px,取最近的 1.5px */
+.thm-seal::after{content:'';position:absolute;inset:2px;border:1px dashed color-mix(in srgb,#d9534a 34%,transparent);border-radius:1.5px;pointer-events:none;}
+/* 印章可按(11.7):每条规则自带退出阀 + "破了会怎样",这两句必须给玩家看得到,
+   不能只发给 AI。所以印章要有可按的视觉:hover 微抬 + 旋转回正,按下描边加深。 */
+.thm-seal{cursor:pointer;transition:transform var(--thm-t-micro) var(--thw-std),border-color var(--thm-t-micro) var(--thw-std);}
+.thm-seal:hover,.thm-seal:focus-visible{transform:rotate(0) translateY(-1px);border-color:color-mix(in srgb,#d9534a 72%,transparent);outline:none;}
+.thm-seal.open{transform:rotate(0);border-color:#d9534a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.7),0 0 0 2px color-mix(in srgb,#d9534a 18%,transparent);}
+/* 规则原文展开区:从顶栏垂下来的浮层,不许当行内块 —— 横版下它一展开就把舞台顶变形。
+   朱砂红只留在章上,正文用普通卡面字色(11.7:朱砂红只作小面积)。 */
+.thm-ruletext{
+  display:none; position:absolute; right:14px; top:44px; z-index:6; width:min(360px,52%);
+  font-size:11.5px; font-weight:500; line-height:1.75; color:var(--thw-text-2);   /* 8.2 正文 1.75 */
+  background:linear-gradient(180deg,rgba(255,253,249,.97),rgba(255,250,244,.95));
+  border:1px solid color-mix(in srgb,#d9534a 26%,transparent);
+  border-left:2px solid color-mix(in srgb,#d9534a 52%,transparent);
+  border-radius:var(--thw-r-sm); padding:9px 12px; box-shadow:var(--thw-elev-float);
+}
+.thm-ruletext.show{display:block;animation:thmDrop .22s var(--thw-drift);}
+@keyframes thmDrop{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+/* 独有物:该地唯一物件,舞台正中最重的一枚(玫瑰金 + 更大的光) */
+.thm-hot-only{
+  border-color:color-mix(in srgb,var(--thm-gold-2) 62%,transparent);
+  background:linear-gradient(135deg,rgba(255,251,244,.9),rgba(253,243,232,.84));
+  color:var(--thw-text); font-size:12.5px; padding:6px 13px 6px 9px;
+}
+.thm-hot-only i{
+  width:9px; height:9px; background:var(--thm-gold-2);
+  box-shadow:0 0 10px color-mix(in srgb,var(--thm-gold-2) 78%,transparent);
+}
+/* 「看」组 = 主要景观。与「用」组同一款浮帖 pill(统一各处物品的包裹),只把标记换成**空心圆** + 更轻的字重,
+   保留"只能看"的语义——点了仍是「观察」,不会造出"我使用池心白汽柱"的病句(路由在 click 里判 .thm-look,11.9)。 */
+.thm-look{
+  cursor:pointer; font-size:12px; font-weight:500; color:var(--thw-text-2);
+  border:1px solid color-mix(in srgb,#fff 72%,var(--thw-line)); border-radius:var(--thw-r-pill);
+  background:rgba(255,252,247,.5); padding:5px 11px;
+  display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+  box-shadow:var(--thw-elev-contact);
+  transition:transform var(--thm-t-micro) var(--thw-std),background var(--thm-t-micro) var(--thw-std),color var(--thm-t-micro) var(--thw-std);
+}
+.thm-look::before{content:'';width:6px;height:6px;border-radius:50%;border:1px solid var(--thw-muted);flex:0 0 auto;background:none;}
+.thm-look:hover{transform:translateY(-1px);background:#fff;color:var(--thw-text);}
+.thm-look:focus-visible{outline:2px solid color-mix(in srgb,var(--thw-accent) 62%,transparent);outline-offset:2px;}
+.thm-look.on{border-color:transparent;background:linear-gradient(135deg,var(--thw-accent),var(--thw-accent-2));color:#fff;font-weight:700;}
+.thm-look.on::before{border-color:#fff;background:#fff;}
+/* L3 卡右下主操作按钮(注入)。金色 ★ 与力度档同列,视觉上区别于 16 个通用动词。 */
+.thm-star{
+  cursor:pointer; text-align:center; padding:6px 12px; white-space:nowrap;
+  font-size:11.5px; font-weight:700; line-height:1.4; color:var(--thw-text);
+  border:1px solid color-mix(in srgb,var(--thm-gold-2) 62%,transparent); border-radius:var(--thw-r-pill);
+  background:linear-gradient(135deg,rgba(255,249,238,.95),rgba(252,238,222,.9));
+  transition:transform var(--thm-t-micro) var(--thw-std),box-shadow var(--thm-t-micro) var(--thw-std);
+}
+.thm-star::before{content:'★';margin-right:5px;color:var(--thm-gold-2);}
+.thm-star:hover{transform:translateY(-1px);box-shadow:var(--thw-elev-contact);}
+/* 动词面板 = 对话框上沿的一条横排指令带(覆盖 11.8「竖排贴右缘」:
+   竖轨会在 16:9 舞台上切掉一条 74px 的立绘,而横版里立绘宽度就是主角)。
+   ⚠ 半透明只许给整条带,不许给每颗按钮:半透按钮叠半透带会得到 .3 的字,破 8.5。 */
+.thm-rail{
+  position:relative; z-index:4; flex:0 0 auto;
+  display:flex; align-items:flex-end; gap:8px; padding:0 16px 7px;
+  opacity:.62; transition:opacity .2s var(--thw-std);
+}
+.thm-rail:hover,.thm-rail:focus-within{opacity:1;}
+/* 动词横排、允许换行:各地动词数不等,换行比压扁好 */
+.thm-verbs{display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0;}
+.thm-verb{
+  cursor:pointer; font-size:12px; font-weight:500; padding:5px 12px;
+  border:1px solid color-mix(in srgb,#fff 52%,var(--thw-line)); border-radius:var(--thw-r-pill);
+  background:rgba(255,253,249,.82); color:var(--thw-text-2);
+  writing-mode:horizontal-tb; text-align:center; white-space:nowrap;
+  box-shadow:var(--thw-elev-contact);
+  transition:transform var(--thm-t-micro) var(--thw-std),background var(--thm-t-micro) var(--thw-std),color var(--thm-t-micro) var(--thw-std);
+}
+.thm-verb:hover{transform:translateX(-2px);background:#fff;color:var(--thw-text);}
+.thm-verb.on{background:linear-gradient(135deg,var(--thw-accent),var(--thw-accent-2));color:#fff;font-weight:700;border-color:transparent;box-shadow:var(--thw-elev-contact);}
+/* 在场没人的人向动词:压暗但保持可点,点了亮一枚 chip 提示先有人(非静默禁用)。 */
+.thm-verb.off{color:var(--thw-faint);border-style:dashed;background:rgba(255,255,255,.45);}
+.thm-verb.off:hover{transform:none;color:var(--thw-text-2);}
+.thm-flash{
+  position:absolute; left:50%; bottom:14px; transform:translate(-50%,8px);
+  z-index:5; max-width:76%; pointer-events:none;
+  font-size:11.5px; font-weight:500; line-height:1.6; color:#fff;
+  background:rgba(74,46,51,.92); border-radius:var(--thw-r-pill); padding:7px 14px;
+  box-shadow:var(--thw-elev-card); opacity:0;
+  transition:opacity .18s var(--thw-in),transform .24s var(--thw-drift);
+}
+.thm-flash.show{opacity:1;transform:translate(-50%,0);}
+/* 力度档:选中档必须 accent 填充(11.8 最易错 = 三档一样亮)。
+   ⚠ 别用"白底 + accent 字"当选中态:轨底同为浅色,选中就看不出来。 */
+.thm-int{display:flex;gap:4px;padding:3px;background:var(--thw-soft);border:1px solid var(--thw-line-soft);border-radius:var(--thw-r-pill);}
+.thm-int button{cursor:pointer;border:none;background:transparent;color:var(--thw-muted);font-size:11.5px;font-weight:500;padding:4px 12px;border-radius:var(--thw-r-pill);transition:all var(--thm-t-micro) var(--thw-std);}
+.thm-int button:hover{color:var(--thw-text);}
+.thm-int button.on{background:linear-gradient(135deg,var(--thw-accent),var(--thw-accent-2));color:#fff;font-weight:700;box-shadow:var(--thw-elev-contact);}
+/* 句子预览条 = 11.9 的主角控件:深底高对比字(11.9 最易错 = 对比不够,
+   底色一跟整卡同亮度就废了)。
+   ⚠ 字色必须显式写死 + -webkit-text-fill-color 兜底,不许裸继承:
+     它是 contenteditable,某些内核会把祖先的 --thw-text-2 继承进来 ⇒ 深底深字。 */
+.thm-prevwrap{position:relative;}
+.thm-prev{
+  border:1px solid color-mix(in srgb,var(--thw-line) 82%,transparent);
+  border-radius:var(--thw-r-sm);
+  background:linear-gradient(180deg,#fffdfb,#fff8f1); color:var(--thw-text); -webkit-text-fill-color:var(--thw-text);
+  caret-color:var(--thw-accent);
+  padding:10px 12px; font-size:13px; font-weight:500; line-height:1.75;
+  min-height:52px; outline:none;
+  box-shadow:var(--thw-elev-contact);
+}
+.thm-prev:focus{border-color:var(--thw-accent);box-shadow:var(--thw-elev-card),0 0 0 3px color-mix(in srgb,var(--thw-accent) 20%,transparent);}
+/* 条内"可改"提示,和条内字同族 */
+.thm-prev-hint{
+  position:absolute; right:10px; top:-1px; transform:translateY(-100%);
+  font-size:10px; font-weight:500; color:var(--thw-faint); text-shadow:0 1px 0 #fff;
+  cursor:pointer;
+}
+.thm-prev-hint:hover{color:var(--thw-text-2);}
+.thm-prev-hint.warn{color:var(--thw-accent); font-weight:700;}
+/* 手写锁定态:边框变主题色,暗示程序不再覆写这一行 */
+.thm-prev.custom{border-color:color-mix(in srgb,var(--thw-accent) 65%,transparent);}
+/* 底栏 = galgame 对话框。横版下它贴在卡底浮在立绘上,
+   上沿一道渐隐让它和立绘融进去(硬边框会又变回"框")。 */
+.thm-l3-foot{
+  position:relative; z-index:4; flex:0 0 auto; max-height:46%;
+  display:flex; align-items:stretch; gap:12px; padding:10px 16px 12px;
+  background:linear-gradient(180deg,transparent,rgba(255,251,246,.72) 10%,rgba(255,249,243,.95) 34%);
+}
+.thm-l3-talk{display:flex;flex-direction:column;gap:7px;flex:1;min-width:0;}
+/* 场景文本按内容定高、超长才滚(各地四相长短不一)。
+   ⚠ 不给 flex:1:给了短文本会被拉开,和预览条之间空出一大片。
+   ⚠ min-height 不能写 0:那会把基础规则里"先占两行"的防抖地板一起干掉 ⇒
+      打字机一跑场景块就反复变高,把预览条(全场主角控件)顶得上下动。 */
+.thm-l3-talk .thm-l3-scene{flex:0 1 auto;min-height:calc(12.5px * 1.75 * 2);overflow:auto;}
+.thm-l3-side{display:flex;flex-direction:column;gap:7px;align-items:flex-end;justify-content:flex-end;flex:0 0 auto;}
+.thm-primary{
+  cursor:pointer; border:none; border-radius:var(--thw-r-sm); padding:8px 16px;
+  font-size:13px; font-weight:800; color:#fff;
+  background:linear-gradient(135deg,var(--thw-accent),var(--thw-accent-2));
+  box-shadow:var(--thw-elev-contact);
+  transition:transform var(--thm-t-micro) var(--thw-std),box-shadow var(--thm-t-micro) var(--thw-std);
+}
+.thm-primary:hover{transform:translateY(-1px);box-shadow:var(--thw-elev-card);}
+.thm-primary:active{transform:scale(.97);}
+/* 在场角色条(11.9):带头像横条 */
+.thm-cast{display:flex;align-items:center;gap:6px;}
+.thm-cast .thm-av{width:24px;height:24px;font-size:10.5px;}
+.thm-castrow{
+  display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  background:rgba(255,255,255,.6); border:1px solid var(--thw-line-soft);
+  border-radius:var(--thw-r-pill); padding:4px 8px;
+}
+.thm-castrow .thm-av{width:26px;height:26px;font-size:11px;border:1.5px solid rgba(255,255,255,.9);}
+.thm-castrow .thm-castname{font-size:11px;font-weight:500;color:var(--thw-text-2);}
+.thm-castrow .thm-castnone{font-size:11px;font-weight:500;color:var(--thw-faint);
+  display:inline-flex;align-items:center;gap:6px;}
+
+/* 13.3 瞌睡小猫 = 1 点睛萌点之一(另一处:内发光 11.1)。
+   蜷缩简笔猫 + 三个渐隐的 z。挂 9.3 相位 .8,不自写 duration。
+   ⚠ 耳朵并进同一条轮廓,不另画两枚三角 —— 在场条里只有 26px 高,分件画的耳朵会读成
+      "飘在头边的两块";paint-order:stroke fill 让描边不吃掉填色。 */
+.thm-cat{width:34px;height:26px;flex:0 0 auto;overflow:visible;
+  animation:thmBwCat var(--thm-t-breath) ease-in-out infinite;}
+.thm-cat .body{fill:#f6dfe4;stroke:var(--thm-gold-3);stroke-width:1.1;
+  stroke-linejoin:round;paint-order:stroke fill;}
+.thm-cat .line{fill:none;stroke:var(--thm-gold-3);stroke-width:.9;stroke-linecap:round;}
+.thm-cat .z{fill:var(--thm-gold-3);font-size:7px;font-weight:800;opacity:0;
+  animation:thmZ var(--thm-t-breath) var(--thw-std) infinite;}
+.thm-cat .z2{animation-delay:calc(var(--thm-t-breath) / 3);}
+.thm-cat .z3{animation-delay:calc(var(--thm-t-breath) / 3 * 2);}
+@keyframes thmZ{0%{opacity:0;transform:translate(0,0) scale(.7);}
+  40%{opacity:.85;}100%{opacity:0;transform:translate(4px,-9px) scale(1.05);}}
+.thm-tier1 .thm-cat .z,.thm-nb .thm-cat .z{animation:none;opacity:.5;}
+/* 舞台底沿那一排在场者:立绘位还没图,这排先占着立绘该站的位置。
+   人名那句可能很长(条目「常见人群」是整句),所以限宽 + 单行省略,不许把带撑爆。 */
+.thm-stage .thm-castrow{
+  position:relative; z-index:1;
+  align-self:flex-start; max-width:100%; flex-wrap:nowrap;
+  background:rgba(255,252,247,.66);
+}
+.thm-stage .thm-castrow .thm-castname{
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+/* 在场角色条:头像钉可作动词对象。按钮态重置 + 选中金环。 */
+.thm-cast{background:none;border:0;padding:2px 6px;border-radius:var(--thw-r-sm);cursor:pointer;box-shadow:none;}
+.thm-cast .thm-av{transition:transform .18s var(--thw-std),box-shadow .18s var(--thw-std);}
+.thm-cast:hover{background:rgba(255,255,255,.6);}
+.thm-cast.on .thm-av{box-shadow:0 0 0 2px var(--thm-gold-2),0 2px 8px rgba(150,90,110,.18);transform:translateY(-1px);}
+/* 卡片内快移条:附近(路网邻点) + 最近去过(日志)。票券式小胶囊。 */
+.thm-navrow{display:flex;align-items:center;flex-wrap:wrap;gap:5px;padding:4px 14px 2px;font-size:11px;}
+.thm-nav-lbl{font-weight:700;color:var(--thw-muted);margin-right:1px;}
+.thm-navchip{
+  border:1px solid var(--thw-line-soft); background:rgba(255,255,255,.72);
+  color:var(--thw-text-2); border-radius:var(--thw-r-pill); padding:2px 9px; font-size:11px;
+  cursor:pointer; transition:border-color .18s var(--thw-std),background .18s var(--thw-std),transform .18s var(--thw-std);
+}
+.thm-navchip:hover{background:#fff;border-color:color-mix(in srgb,var(--thm-gold-2) 62%,transparent);transform:translateY(-1px);}
+/* ===== 承载地图的二级 modal:openModal2(...) 后加 .th-map-host =====
+   ⚠ `.th-modal{contain:layout paint}` 会把地图的绘制裁在 modal 盒子里(12-4),
+     单 overflow:visible 不够,contain 要单独解除。
+   ⚠ 舞台高度走 aspect-ratio + min-height,不用 vh(12-7);min-height 就是 7.6-a
+     那条可用视口下限 620,再矮图例会撞缩放条。 */
+.th-modal-2.th-map-host { max-width:min(1420px,96vw) !important; width:96%; contain:none !important; }
+.th-modal-2.th-map-host .th-modal-body-2 { padding:0 !important; overflow:hidden !important; }
+.th-map-stage {
+  position:relative; width:100%; aspect-ratio:16/9; min-height:620px;
+  border-radius:0 0 var(--rl) var(--rl); overflow:hidden;
+}
+/* ===== 地图段结束 ===== */
+
+/* ===== 地图设置抽屉(10 D8)=====
+   玻璃面板浮在视图右上。壳内绝对定位(11.1-b 不许 fixed)。
+   浅樱肤取 .thm-shell 的 --thw-panel / --thw-text / --thw-accent 一套皮。 */
+.thm-set{
+  position:absolute; top:56px; right:14px; width:304px; max-height:calc(100% - 70px);
+  z-index:34; display:flex; flex-direction:column; overflow:hidden;
+  border-radius:var(--thw-r-md); color:var(--thw-text);
+  font-family:var(--font-body);
+  /* ⚠ 不透明:--thw-panel 在各主题都是 rgba(…,α),当背景会透出地图 */
+  background:linear-gradient(180deg,#fffdfb,#fff8f1);
+  border:1px solid var(--thw-line);
+  box-shadow:var(--thw-elev-float);
+}
+.thm-set[hidden]{display:none;}
+.thm-set-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid var(--thw-line-soft);font-size:13.5px;font-weight:700;}
+.thm-set-head .thm-set-btn{border:none;background:transparent;padding:2px 6px;font-size:13px;color:var(--thw-muted);}
+.thm-set-body{overflow:auto;padding:2px 0 10px;}
+.thm-set-sec{padding:10px 14px 4px;border-bottom:1px solid var(--thw-line-soft);}
+.thm-set-sec:last-child{border-bottom:none;}
+.thm-set-label{font-size:11px;font-weight:700;color:var(--thw-muted);margin:0 0 8px;display:flex;align-items:center;gap:6px;}
+.thm-set-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:5px 0;position:relative;}
+.thm-set-row input[type=checkbox]{accent-color:var(--thw-accent);}
+.thm-set-row select{background:var(--thw-panel);color:var(--thw-text);border:1px solid var(--thw-line);border-radius:var(--thw-r-sm);padding:2px 6px;font-size:12px;margin-left:auto;}
+.thm-set-row em{font-style:normal;color:var(--thw-muted);font-size:11px;margin-left:auto;}
+.thm-set-actbar{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 8px;}
+.thm-set-actbar-col{flex-direction:column;}
+.thm-set-btn{background:color-mix(in srgb,var(--thw-accent) 10%,transparent);border:1px solid var(--thw-line);color:var(--thw-text);border-radius:var(--thw-r-sm);padding:5px 10px;font-size:12px;cursor:pointer;}
+.thm-set-btn:hover{filter:brightness(1.06);}
+.thm-set-btn.danger{background:color-mix(in srgb,#d96a7a 14%,transparent);border-color:color-mix(in srgb,#d96a7a 46%,transparent);}
+.thm-set-artlist{display:flex;flex-direction:column;gap:6px;max-height:208px;overflow:auto;padding:2px 0 8px;}
+.thm-set-art{display:flex;align-items:center;gap:8px;font-size:12px;}
+.thm-set-art .thm-set-btn{padding:3px 7px;font-size:11px;}
+.thm-set-thumb{width:26px;height:34px;object-fit:cover;border-radius:var(--thw-r-xs);background:var(--thw-soft);}
+.thm-set-thumb.thm-set-none{display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--thw-faint);}
+.thm-set-art-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+
+/* 已开世界书总览:与 .thm-set 同一落点(右上),两者互斥开,复用其外壳与按钮样式 */
+.thm-books-headbtns{display:flex;align-items:center;gap:6px;}
+.thm-books-list{display:flex;flex-direction:column;gap:4px;padding:8px 14px;}
+.thm-books-row{display:flex;align-items:center;gap:8px;font-size:12.5px;}
+.thm-books-row .thm-set-btn{padding:3px 8px;font-size:11px;flex:0 0 auto;}
+/* ⚠ .thm-bm 本体是 position:absolute(给节点定位),在行里必须改回静态否则脱流 */
+.thm-books-row .thm-bm{position:static;flex:0 0 auto;}
+.thm-books-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;}
+.thm-books-empty{padding:18px 14px;font-size:12px;line-height:1.7;color:var(--thw-muted);text-align:center;}
+

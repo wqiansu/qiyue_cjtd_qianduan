@@ -1,7 +1,7 @@
 // 全局横切设置的提示词指令生成（图片字数范围 + 互动用户性别）。
 //   所有 app 的「图片描述篇幅」与「人物/路人性别生态」统一读这里，玩家在总体设置里改一次、全 app 生效。
 //   约束：纯数据/文本层，不碰 DOM。
-import { getWorldConfig, type GenderConfig } from './world-store';
+import { getWorldConfig } from './world-store';
 
 // 图片描述字数约束（一句话指令，拼进各 app 的 sceneDesc/coverDesc 提示词）。
 export function imageWordsDirective(): string {
@@ -52,8 +52,6 @@ export function defaultGenderWord(): string {
   if (g.mode === 'custom') return '';   // 自定义时不强制单值
   return '女';
 }
-
-export function getGenderConfig(): GenderConfig { return getWorldConfig().gender; }
 
 // 调试挂载
 try {

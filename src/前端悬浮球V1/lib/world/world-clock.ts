@@ -39,10 +39,13 @@ export const DEFAULT_CLOCK: WorldClock = {
 };
 
 let _cache: WorldClock | null = null;
+let _clockRaw: string | null = null;
 export function getWorldClock(): WorldClock {
-  if (_cache) return _cache;
-  const raw = readWorldJson<Partial<WorldClock>>(CLOCK_LS_KEY, {});
-  _cache = { ...DEFAULT_CLOCK, ...(raw || {}) };
+  const raw = localStorage.getItem(CLOCK_LS_KEY);
+  if (_cache && raw === _clockRaw) return _cache;
+  _clockRaw = raw;
+  const parsed = readWorldJson<Partial<WorldClock>>(CLOCK_LS_KEY, {});
+  _cache = { ...DEFAULT_CLOCK, ...(parsed || {}) };
   return _cache;
 }
 export function setWorldClock(patch: Partial<WorldClock>): WorldClock {
@@ -53,6 +56,7 @@ export function setWorldClock(patch: Partial<WorldClock>): WorldClock {
   next.hour = ((Math.floor(next.hour) % 24) + 24) % 24;
   next.minute = ((Math.floor(next.minute) % 60) + 60) % 60;
   _cache = next; writeWorldJson(CLOCK_LS_KEY, next);
+  _clockRaw = localStorage.getItem(CLOCK_LS_KEY);
   return next;
 }
 function clampWrap(v: number, lo: number, hi: number): number {
@@ -83,10 +87,6 @@ export function dayPhaseOf(hour: number): DayPhase {
   if (h >= 9 && h < 17) return 'day';
   if (h >= 17 && h < 20) return 'dusk';
   return 'night';
-}
-// 纯 24 小时制——恒返回「HH:00」整点。函数名保留仅为兼容旧调用点。
-export function shichenName(hour: number): string {
-  return `${pad2(((Math.floor(hour) % 24) + 24) % 24)}:00`;
 }
 function pad2(n: number): string { return n < 10 ? '0' + n : String(n); }
 

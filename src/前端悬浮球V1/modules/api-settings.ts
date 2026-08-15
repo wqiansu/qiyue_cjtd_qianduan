@@ -1,15 +1,11 @@
-// API 设置面板。
-// 连接(source/apiurl/key) + 获取模型(getModelList) + 模型 + 采样参数 + 流式 + 预设管理。
-// 持久化:_th_api_presets_v1(预设列表) / _th_api_active_v1(活动预设名)。
-// AI 总结来源区块：选一个已保存的 API 预设 + 选提示词预设 + 仅本次有效；
-//   持久化到 _th_presetenv_active_v1（presetName/onceOnly/aiPresetName）；提供 保存/清除选择/详情/预览。
-// ================================================================
 import { esc, escAttr, qs, qsa, __doc } from '../lib/dom-utils';
 import { openModal2, closeModal2 } from '../status-bar-init';
+import { thConfirm, thPrompt } from '../lib/world/ui-kit';
 import {
   getEnvPresetNames, getEnvPresetDetail,
   getPresetEnvPersist, setPresetEnvPersist, resolveGenerateApiConfig,
   previewGeneratePayload, getEnvLoadedPresetName, getApiPresetNames,
+  envLoadPreset, exportEnvPresetSnapshot, envTestPing,
 } from '../lib/preset-env';
 
 export { resolveGenerateApiConfig };
@@ -19,7 +15,7 @@ const LS_ACTIVE = '_th_api_active_v1';
 
 export interface ApiPreset {
   name: string;
-  source: string;          // API 源,默认 openai
+  source: string;
   apiurl: string;
   key: string;
   model: string;
@@ -38,7 +34,6 @@ const DEFAULT_PRESET: ApiPreset = {
   frequency_penalty:'same_as_preset', presence_penalty:'same_as_preset', top_k:'same_as_preset',
 };
 
-// ---- 持久化 ----
 function loadPresets(): ApiPreset[] {
   try {
     const raw = localStorage.getItem(LS_PRESETS);
@@ -58,7 +53,6 @@ function saveActive(name: string): void {
   try { localStorage.setItem(LS_ACTIVE, name); } catch(e){ void e; }
 }
 
-// getModelList 在酒馆助手全局;iframe 内可能没有,走 getRoot
 function getGetModelList(): ((cfg:{apiurl:string;key?:string})=>Promise<string[]>)|null {
   try {
     const w = window as any;
@@ -69,18 +63,16 @@ function getGetModelList(): ((cfg:{apiurl:string;key?:string})=>Promise<string[]
   return null;
 }
 
-// ---- 面板状态(单实例,面板开期间持有) ----
 interface PanelState {
   presets: ApiPreset[];
-  active: string;          // 当前活动预设名
-  editing: string;         // 当前编辑的预设名
-  showKey: boolean;        // key 显隐
-  models: string[];        // 获取模型拉到的模型列表
+  active: string;
+  editing: string;
+  showKey: boolean;
+  models: string[];
   testing: boolean;
-  // AI 总结来源 — 选哪个已保存 API 预设 + 提示词预设 + 仅本次有效
-  aiPresetName: string;       // 选的已保存 API 预设名（'' = 用活动预设兜底）
-  selPreset: string;       // 选的提示词预设名（'' = 用 generate 内置提示词）
-  onceOnly: boolean;       // 仅本次有效
+  aiPresetName: string;
+  selPreset: string;
+  onceOnly: boolean;
 }
 let st: PanelState|null = null;
 
@@ -89,14 +81,12 @@ export function openApiSettings(): void {
   const active = loadActive();
   const pe = getPresetEnvPersist();
   st = { presets, active, editing: active, showKey:false, models:[], testing:false, aiPresetName: pe.aiPresetName, selPreset: pe.presetName, onceOnly: pe.onceOnly };
-  // 编辑态取活动预设的副本
   const cur = presets.find(p=>p.name===active) || presets[0];
   st.editing = cur.name;
   openModal2(`<i class="fa-solid fa-key"></i> API 设置`, renderApiPanel(), { maxWidth:'min(680px,94vw)', reset: true, revive: openApiSettings });
   setTimeout(()=>bindApiEvents(), 60);
 }
 
-// 当前编辑中的预设对象(引用,直接改即持久化源)
 function curPreset(): ApiPreset|null {
   if(!st) return null;
   return st.presets.find(p=>p.name===st!.editing) || null;
@@ -181,6 +171,11 @@ function renderApiPanel(): string {
           <option value="" ${st.selPreset===''?'selected':''}>用 AI 总结内置提示词（不传预设）</option>
           ${getEnvPresetNames().map(p=>`<option value="${escAttr(p.name)}" ${p.name===st!.selPreset?'selected':''}>${esc(p.name)}${p.isLoaded?' (当前加载)':''}</option>`).join('')}
         </select>
+        <div class="th-api-env-btns" style="display:flex;gap:4px;justify-content:flex-end">
+          <button class="th-btn-sm th-api-env-activate" type="button" title="加载酒馆全局预设（影响正常聊天）"><i class="fa-solid fa-bolt"></i> 启用</button>
+          <button class="th-btn-sm th-api-env-test" type="button" title="发送 ping 测试当前 AI 环境可用性"><i class="fa-solid fa-flask"></i> 测试</button>
+          <button class="th-btn-sm th-api-env-export" type="button" title="导出该预设为 JSON"><i class="fa-solid fa-download"></i> 导出</button>
+        </div>
         <label class="th-api-env-once" title="勾选=仅在 AI 调用时临时传该预设，不影响酒馆全局；不勾=切换酒馆全局预设"><input type="checkbox" id="th-api-env-once" ${st.onceOnly?'checked':''}> 仅本次有效</label>
       </div>
       <div class="th-api-ai-saved-snapshot" id="th-api-ai-snapshot">${renderSavedSnapshot()}</div>
@@ -198,7 +193,6 @@ function renderApiPanel(): string {
   </div>`;
 }
 
-// 当前已保存概览只读行（回显 _th_presetenv_active_v1）
 function renderSavedSnapshot(): string {
   const pe = getPresetEnvPersist();
   const api = pe.aiPresetName || '(活动预设)';
@@ -207,7 +201,6 @@ function renderSavedSnapshot(): string {
   return `<span class="th-api-ai-snap-lbl">当前已保存：</span><b>API=${esc(api)}</b> · <b>提示词=${esc(prompt)}</b> · <b>${once}</b>`;
 }
 
-// 采样行:模式下拉(same_as_preset/unset/自定义) + 自定义时滑块+数值
 function samplingRow(field:string, label:string, val:'same_as_preset'|'unset'|number, min:number, max:number, step:number): string {
   const isNum = typeof val === 'number';
   const mode = isNum ? 'custom' : (val as string);
@@ -227,11 +220,9 @@ function bindApiEvents(): void {
   if(!st) return;
   const refresh = ()=>{ const body=qs('.th-modal-body-2'); if(body){ body.innerHTML=renderApiPanel(); setTimeout(()=>bindApiEvents(),40); } };
 
-  // 预设切换
   qs('#th-api-preset')?.addEventListener('change',function(this:HTMLSelectElement){
     if(!st) return; st.editing = this.value; refresh();
   });
-  // 新建预设
   qs('.th-api-preset-new')?.addEventListener('click',()=>{
     if(!st) return;
     let n='预设'+(st.presets.length+1);
@@ -239,25 +230,22 @@ function bindApiEvents(): void {
     st.presets.push({ ...DEFAULT_PRESET, name:n });
     st.editing=n; savePresets(st.presets); refresh();
   });
-  // 重命名
-  qs('.th-api-preset-rename')?.addEventListener('click',()=>{
+  qs('.th-api-preset-rename')?.addEventListener('click',async()=>{
     if(!st) return; const p=curPreset(); if(!p) return;
-    const n=(prompt('预设新名称:',p.name)||'').trim(); if(!n||n===p.name) return;
+    const n=(await thPrompt({title:'重命名预设',value:p.name,placeholder:'新名称'})||'').trim(); if(!n||n===p.name) return;
     if(st.presets.some(x=>x.name===n)){ toastr?.warning?.('该名称已存在'); return; }
     const old=p.name; p.name=n;
     if(st.active===old) { st.active=n; saveActive(n); }
     st.editing=n; savePresets(st.presets); refresh();
   });
-  // 删除预设
-  qs('.th-api-preset-del')?.addEventListener('click',function(this:HTMLButtonElement){
+  qs('.th-api-preset-del')?.addEventListener('click',async function(this:HTMLButtonElement){
     if(!st||this.disabled) return; if(st.presets.length<=1) return;
     const p=curPreset(); if(!p) return;
-    if(!confirm(`删除预设「${p.name}」?`)) return;
+    if(!await thConfirm({title:'删除预设',message:`确定要删除预设「${p.name}」吗？`,confirmText:'删除',danger:true})) return;
     st.presets = st.presets.filter(x=>x.name!==p.name);
     if(st.active===p.name){ st.active=st.presets[0].name; saveActive(st.active); }
     st.editing=st.presets[0].name; savePresets(st.presets); refresh();
   });
-  // 设为活动
   qs('.th-api-preset-activate')?.addEventListener('click',function(this:HTMLButtonElement){
     if(!st||this.disabled) return; const p=curPreset(); if(!p) return;
     collectFormToPreset(p);
@@ -266,22 +254,17 @@ function bindApiEvents(): void {
     refresh();
   });
 
-  // 连接字段(实时存)
   bindInput('#th-api-source', v=>{ const p=curPreset(); if(p){ p.source=v; savePresets(st!.presets); } });
   bindInput('#th-api-apiurl', v=>{ const p=curPreset(); if(p){ p.apiurl=v; savePresets(st!.presets); } });
   bindInput('#th-api-key', v=>{ const p=curPreset(); if(p){ p.key=v; savePresets(st!.presets); } });
-  // key 显隐
   qs('.th-api-key-toggle')?.addEventListener('click',()=>{ if(st){ st.showKey=!st.showKey; refresh(); } });
-  // 模型(手填或下拉)
   bindInput('#th-api-model-manual', v=>{ const p=curPreset(); if(p){ p.model=v; savePresets(st!.presets); } });
   qs('#th-api-model-sel')?.addEventListener('change',function(this:HTMLSelectElement){
     const p=curPreset(); if(p){ p.model=this.value; savePresets(st!.presets); }
   });
-  // 流式
   qs('#th-api-stream')?.addEventListener('change',function(this:HTMLInputElement){
     const p=curPreset(); if(p){ p.should_stream=this.checked; savePresets(st!.presets); }
   });
-  // 采样
   qsa('[data-sample-mode]').forEach(sel=>sel.addEventListener('change',function(this:HTMLSelectElement){
     if(!st) return; const field=this.getAttribute('data-sample-mode') as keyof ApiPreset;
     const p=curPreset(); if(!p) return;
@@ -301,13 +284,11 @@ function bindApiEvents(): void {
     (p as any)[field] = Number(this.value)||0; savePresets(st.presets);
   }));
 
-  // 测试连接
   qs('.th-api-test')?.addEventListener('click', async function(this:HTMLButtonElement){
     if(!st||this.disabled) return;
     const p=curPreset(); if(!p) return;
     collectFormToPreset(p);
     if(!p.apiurl){ toastr?.warning?.('请先填写 Base URL'); return; }
-    // 只更新「模型」分组与结果文本，不整页重渲染（避免闪烁、丢焦点/滚动）。
     const btn=this; btn.disabled=true; const ico=btn.querySelector('i');
     if(ico){ ico.className='fa-solid fa-spinner fa-spin'; } const oldHtml=btn.innerHTML; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> 获取中…';
     const fn=getGetModelList();
@@ -317,7 +298,6 @@ function bindApiEvents(): void {
       if(row){ row.innerHTML = st!.models.length
         ? `<select class="th-edit-select th-api-model-select" id="th-api-model-sel">${st!.models.map(m=>`<option value="${escAttr(m)}" ${m===p.model?'selected':''}>${esc(m)}</option>`).join('')}</select>`
         : `<input class="th-edit-input" id="th-api-model-manual" value="${escAttr(p.model)}" placeholder="手填模型名,如 gpt-4o">`;
-        // 重新绑定模型输入/下拉
         qs('#th-api-model-manual')?.addEventListener('input',function(this:HTMLInputElement){ const pp=curPreset(); if(pp){ pp.model=this.value; savePresets(st!.presets); } });
         qs('#th-api-model-sel')?.addEventListener('change',function(this:HTMLSelectElement){ const pp=curPreset(); if(pp){ pp.model=this.value; savePresets(st!.presets); } });
       }
@@ -343,12 +323,9 @@ function bindApiEvents(): void {
     }
   });
 
-  // AI 来源区块
-  // ① 选 API 预设（实时更新 st，不立即持久化——「保存」按钮才持久化）
   qs('#th-api-aipreset')?.addEventListener('change',function(this:HTMLSelectElement){
     if(!st) return; st.aiPresetName = this.value;
   });
-  // ② 提示词预设 + 仅本次（实时更新 st，不立即持久化）
   qs('#th-api-env-preset')?.addEventListener('change',function(this:HTMLSelectElement){
     if(!st) return; st.selPreset = this.value;
   });
@@ -361,16 +338,38 @@ function bindApiEvents(): void {
   });
   qs('.th-api-env-preview')?.addEventListener('click',()=>{
     if(!st) return;
-    openEnvPreviewModal(st.selPreset);
+    void openEnvPreviewModal(st.selPreset);
   });
-  // 保存：持久化 aiPresetName + 提示词预设 + 仅本次 → setPresetEnvPersist，刷新概览，成功提示
+  qs('.th-api-env-activate')?.addEventListener('click',()=>{
+    if(!st) return;
+    const name = st.selPreset;
+    if(!name){ toastr?.warning?.('请先选择提示词预设'); return; }
+    const ok = envLoadPreset(name);
+    toastr?.[ok?'success':'error']?.(ok?`已加载全局预设「${name}」`:`加载预设「${name}」失败`);
+  });
+  qs('.th-api-env-test')?.addEventListener('click',()=>{
+    if(!st) return;
+    const btn = qs<HTMLButtonElement>('.th-api-env-test');
+    const old = btn?.innerHTML;
+    if(btn){ btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> 测试中'; }
+    envTestPing().then(t=>{
+      toastr?.success?.('连接正常：'+String(t).slice(0,80));
+    }).catch(e=>{
+      toastr?.error?.('测试失败：'+(e instanceof Error?e.message:String(e)));
+    }).finally(()=>{
+      if(btn){ btn.disabled=false; btn.innerHTML=old||''; }
+    });
+  });
+  qs('.th-api-env-export')?.addEventListener('click',()=>{
+    if(!st) return;
+    exportEnvPresetSnapshot(st.selPreset || getEnvLoadedPresetName() || '');
+  });
   qs('.th-api-ai-save')?.addEventListener('click',()=>{
     if(!st) return;
     setPresetEnvPersist({ presetName: st.selPreset, onceOnly: st.onceOnly, aiPresetName: st.aiPresetName });
     const snap = qs('#th-api-ai-snapshot'); if(snap) snap.innerHTML = renderSavedSnapshot();
     toastr?.success?.('已保存 AI 总结来源设置');
   });
-  // 清除选择：三项清空持久化 + st，刷新概览
   qs('.th-api-ai-clear')?.addEventListener('click',()=>{
     if(!st) return;
     st.aiPresetName=''; st.selPreset=''; st.onceOnly=true;
@@ -382,7 +381,6 @@ function bindApiEvents(): void {
     toastr?.info?.('已清除 AI 总结来源选择');
   });
 
-  // 完成
   qs('.th-api-done')?.addEventListener('click',()=>{
     const p=curPreset(); if(p){ collectFormToPreset(p); savePresets(st!.presets); }
     setPresetEnvPersist({ presetName: st!.selPreset, onceOnly: st!.onceOnly, aiPresetName: st!.aiPresetName });
@@ -390,7 +388,6 @@ function bindApiEvents(): void {
   });
 }
 
-// 把表单当前值收集回预设对象(切预设/设活动/测试前调用,防丢输入)
 function collectFormToPreset(p: ApiPreset): void {
   const g = (id:string)=>{ const el=qs<HTMLInputElement|HTMLSelectElement>(id); return el?el.value:''; };
   p.source=g('#th-api-source'); p.apiurl=g('#th-api-apiurl'); p.key=g('#th-api-key');
@@ -405,7 +402,6 @@ function bindInput(sel:string, cb:(v:string)=>void): void {
   qs(sel)?.addEventListener('input',function(this:HTMLInputElement){ cb(this.value); });
 }
 
-// ==================== 提示词预设详情 modal ====================
 function openEnvDetailModal(name: string): void {
   if(!name){ toastr?.warning?.('未选择提示词预设（当前酒馆未加载预设时无法查看）'); return; }
   const detail = getEnvPresetDetail(name);
@@ -433,9 +429,8 @@ function openEnvDetailModal(name: string): void {
   setTimeout(()=>qs('#th-env-detail-close')?.addEventListener('click',closeModal2),40);
 }
 
-// ==================== 发送前预览 modal ====================
-function openEnvPreviewModal(presetName: string): void {
-  const userInput = prompt('预览发送内容 —— 输入 user_input（留空用空）:', '') ?? '';
+async function openEnvPreviewModal(presetName: string): Promise<void> {
+  const userInput = (await thPrompt({title:'预览发送内容',message:'输入 user_input（留空用空）'}) ?? '');
   const text = previewGeneratePayload(presetName || getEnvLoadedPresetName() || '', userInput);
   const h = `<div class="th-api-env-preview" style="padding:12px">
     <div style="color:var(--tx2);font-size:12px;margin-bottom:8px;line-height:1.6">以下是将拼装发给 AI 的提示词（仅预览，不实际发送）。提示词预设为 <b>${esc(presetName||'酒馆当前加载预设')}</b>。</div>

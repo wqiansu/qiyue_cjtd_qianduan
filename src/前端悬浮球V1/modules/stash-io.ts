@@ -36,6 +36,7 @@ import { getCurrentStashTab, openStashModal } from './stash-modal';
 import { jsonrepair } from 'jsonrepair';
 import { parse as yamlParse } from 'yaml';
 import { z } from 'zod';
+import { thConfirm } from '../lib/world/ui-kit';
 
 export type InitialWriteMode = 'append' | 'dedupe';
 export type InitialWriteItem = { name: string; desc: string; tags: string[]; inject?: string; links?: { locations?: string[]; events?: string[]; dlcs?: string[] } };
@@ -816,7 +817,7 @@ export function openRuntimeImportModal(collected: Record<string, RuntimeStashCan
 
 // 导出
 // 导入
-export function importStashKind(kind: ManagedKind, text: string, applyTag?: string) {
+export async function importStashKind(kind: ManagedKind, text: string, applyTag?: string) {
   // 导入前置校验闸门（坏数据拦截，不接管后续同名覆盖逻辑）
   if (!assertImportPayload(text, getStashKindCfg(kind).label)) return;
   const cfg = getStashKindCfg(kind);
@@ -835,7 +836,7 @@ export function importStashKind(kind: ManagedKind, text: string, applyTag?: stri
   const existingCount = candidates.filter(c => getManagedItems(kind)[c.name]).length;
   let overwrite = false;
   if (existingCount > 0) {
-    overwrite = confirm(`检测到 ${existingCount} 条同名${cfg.label}已存在。\n点击「确定」全部覆盖，点击「取消」全部跳过。`);
+    overwrite = await thConfirm({title:'同名条目怎么处理',message:`检测到 ${existingCount} 条同名${cfg.label}已存在。`,confirmText:'全部覆盖',cancelText:'全部跳过'});
   }
   for (const { name, item } of candidates) {
     try {
@@ -954,7 +955,7 @@ export function openImportWithTagModal(targetKind: ManagedKind | '__all__', text
   });
 
   qs('#import-tag-cancel')?.addEventListener('click', closeModal2);
-  qs('#import-tag-confirm')?.addEventListener('click', () => {
+  qs('#import-tag-confirm')?.addEventListener('click', async () => {
     const selected = qsa<HTMLInputElement>('input[name="import-tag"]:checked')[0]?.value;
     let applyTag = selected;
 
@@ -969,11 +970,11 @@ export function openImportWithTagModal(targetKind: ManagedKind | '__all__', text
       }
     }
 
-    // 执行实际导入
+    // 执行实际导入（内部含同名覆盖确认，须等其结束后再关窗刷新）
     if (targetKind === '__all__') {
-      importAllStashKinds(allTabs, text, applyTag);
+      await importAllStashKinds(allTabs, text, applyTag);
     } else {
-      importStashKind(targetKind, text, applyTag);
+      await importStashKind(targetKind, text, applyTag);
     }
     closeModal2();
     openStashModal(targetKind === '__all__' ? 'all' : targetKind);
@@ -1047,7 +1048,7 @@ export function openExportByTagModal(kind: ManagedKind) {
 }
 
 // 导入全部 kind（"全部" tab）— 解析 JSON 多 kind 或旧 TSV # [kind] 分组
-export function importAllStashKinds(allTabs: ManagedKind[], text: string, applyTag?: string) {
+export async function importAllStashKinds(allTabs: ManagedKind[], text: string, applyTag?: string) {
   // 导入前置校验闸门
   if (!assertImportPayload(text, '储藏间')) return;
   const allTags = loadTags();
@@ -1079,7 +1080,7 @@ export function importAllStashKinds(allTabs: ManagedKind[], text: string, applyT
   const existingCount = plan.filter(p => getManagedItems(p.kind)[p.name]).length;
   let overwrite = false;
   if (existingCount > 0) {
-    overwrite = confirm(`检测到 ${existingCount} 条同名卡片已存在。\n点击「确定」全部覆盖，点击「取消」全部跳过。`);
+    overwrite = await thConfirm({title:'同名条目怎么处理',message:`检测到 ${existingCount} 条同名卡片已存在。`,confirmText:'全部覆盖',cancelText:'全部跳过'});
   }
 
   let imported = 0;

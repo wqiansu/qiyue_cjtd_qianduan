@@ -1,6 +1,3 @@
-// 世界套件 —— 小红书（red）数据层（red-store.ts）
-// PC 端生活分享社区：笔记（图文卡）+ 博主生态分层 + 关注关系 + 我发笔记 + 收藏夹灵感板 +
-//   种草好物卡 + 商单联动 + 薯条投流 + 话题活动挑战。数据纯本地 _th_world_red_v1。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
 export type RedComment = { id: string; author: string; content: string; likes: number; ts: number; replyTo?: string };

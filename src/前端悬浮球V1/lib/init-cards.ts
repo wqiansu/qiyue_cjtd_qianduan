@@ -1,8 +1,5 @@
-// 初始卡片中间层（独立 localStorage，介于「实时卡片」与「世界书 [初始] 条目」之间）。
-// 三层存储模型：
-//   实时卡片(managed-store) ⟷ 初始卡片(本模块) ⟷ 世界书[初始·xxx]
-// 初始卡片是一份独立的基线快照，玩家可在初始化管理里单独编辑、与上下两层各自读/写，互不串味。
-// 严格向下兼容：仅新增 key _th_init_cards_v1，不动现有 managed/[初始·xxx]。
+// 初始卡片中间层（独立 localStorage _th_init_cards_v1，介于「实时卡片」与「世界书 [初始] 条目」之间）。
+// 初始卡片是一份独立的基线快照，玩家可在初始化管理里单独编辑，与上下两层各自读/写，互不串味。
 import type { ManagedItemV2, LinksGraph } from './managed-store';
 
 const LS_INIT_CARDS = '_th_init_cards_v1';
@@ -123,7 +120,6 @@ export function setInitLinks(graph: LinksGraph | null): void {
 
 // ==================== 整包 ====================
 
-// 整包导出/导入用：拿到全部初始卡片层快照。
 export function exportInitCardsSnapshot(): InitCardsStore {
   return readStore();
 }

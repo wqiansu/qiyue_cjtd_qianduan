@@ -1,55 +1,51 @@
-// B站（视频）数据层（bili-store.ts）
-// 模拟视频浏览：AI 生成一批视频卡 → 点开生成详情 + 弹幕流 + 评论楼中楼。数据纯本地 _th_world_bili_v1。
 import { WORLD_LS_KEYS, readWorldJson, writeWorldJson } from './world-store';
 
 export type BiliDanmu = { id: string; text: string; color?: string };
 export type BiliComment = {
   id: string; author: string; content: string; likes: number; ts: number;
-  replyTo?: string;          // 楼中楼：回复某昵称
+  replyTo?: string;
 };
 export type BiliVideo = {
   id: string;
   title: string;
-  up: string;                // up主昵称
-  upRef?: string;            // 关联联系人/角色键（可空）
-  duration: string;          // 时长 文字，如 "12:34"
-  views: string;             // 播放量 文字，如 "12.3万"
-  partition: string;         // 分区，如 "生活/游戏/知识"
-  coverTag?: string;         // 封面英文 NAI tags（可空，出图用）
-  coverDesc?: string;        // 封面/画面中文描述（无后端出图时给玩家看的「这个视频画面里有什么」）
-  cover?: string;            // 已生成封面 URL（可空）
-  desc?: string;             // 视频简介/正文（点开后 AI 生成）
+  up: string;
+  upRef?: string;
+  duration: string;
+  views: string;
+  partition: string;
+  coverTag?: string;
+  coverDesc?: string;
+  cover?: string;
+  desc?: string;
   danmus: BiliDanmu[];
   comments: BiliComment[];
   favorited?: boolean;
-  liked?: boolean;           // 点赞（三连之一）
-  coined?: boolean;          // 投币（三连之一）
-  isMine?: boolean;          // 玩家自己投稿的视频
-  derivedFrom?: string;      // 二创/鬼畜衍生自哪个视频（标题）
-  ts: number;                // 入库时间
-  detailLoaded?: boolean;    // 是否已生成详情
+  liked?: boolean;
+  coined?: boolean;
+  isMine?: boolean;
+  derivedFrom?: string;
+  ts: number;
+  detailLoaded?: boolean;
 };
 
-// UP 主名片（关注流用）。由视频里的 up/upRef 聚合 + AI 生成主页时补全。
 export type BiliUp = {
-  name: string;              // UP 昵称（唯一键）
-  ref?: string;              // 关联角色键
-  identity?: string;         // 真实身份（指定角色开号时记录：这个 UP 其实是世界里的谁，便于辨认）
-  avatar?: string;           // 头像 URL（可空）
-  fans: string;              // 粉丝数文字，如 "12.3万"
-  bio?: string;              // 个人简介
-  followed?: boolean;        // 是否已关注
+  name: string;
+  ref?: string;
+  identity?: string;
+  avatar?: string;
+  fans: string;
+  bio?: string;
+  followed?: boolean;
 };
 
-// 玩家自己的 B站个人资料（投稿/我的主页用）。
 export type BiliProfile = {
   nickname: string;
   avatar?: string;
   banner?: string;
   bio?: string;
-  level: number;             // Lv.1~6
-  fans: string;              // 粉丝数文字
-  following: number;         // 关注数
+  level: number;
+  fans: string;
+  following: number;
 };
 export const DEFAULT_BILI_PROFILE: BiliProfile = {
   nickname: '我', level: 1, fans: '0', following: 0,
@@ -58,34 +54,29 @@ export const DEFAULT_BILI_PROFILE: BiliProfile = {
 type BiliData = {
   videos: BiliVideo[]; history: string[]; ups?: BiliUp[];
   profile?: BiliProfile; settings?: BiliSettings;
-};  // history: 看过的 videoId
+};
 
-// B站设置（上下文+世界书 / API 利用 / 功能提示词 / 分区与播放 / 自动触发 / 记忆与数据）。
 export type BiliSettings = {
   useFloors: boolean;
   floorCount: number;
   useWorldbook: boolean;
   worldbookEntryKeys: string[];
   autoInterval: number;        // 每 N 楼自动刷一批视频，0=关
-  lastFloor: number;           // 上次自动触发时的楼层
-  partitionPref: string;       // 分区偏好（生活/游戏/知识…，空=不限）
-  danmuOn: boolean;            // 详情是否带弹幕
-  quality: string;             // 清晰度文字档（流畅/高清/超清/4K）
-  // 生态/记忆/同步开关
+  lastFloor: number;
+  partitionPref: string;
+  danmuOn: boolean;
+  quality: string;
   derivativeOn: boolean;       // 二创/鬼畜衍生链开关
-  memoryEnabled: boolean;      // 会话记忆总开关
-  syncEnabled: boolean;        // 同步到角色卡世界书 总开关
-  // 生态浓度（通用化注入提示词，不写死）
-  ecoActivity: number;         // UP 活跃度/出片量 0-100（一屏多少条、多少新号冒出）
+  memoryEnabled: boolean;
+  syncEnabled: boolean;
+  ecoActivity: number;         // UP 活跃度/出片量 0-100
   ecoDanmu: number;            // 弹幕密度/刷屏感 0-100
   ecoSnark: number;            // 对线/阴阳/毒舌浓度 0-100
   ecoMeme: number;             // 玩梗/鬼畜整活浓度 0-100
-  ecoErotic: number;           // 色情度浓度 0-100（里区/成人向占比与露骨度）
-  ecoCarnal: number;           // 肉欲度浓度 0-100（UP出镜肉体肉欲与诱惑表现强度）
-  ecoDaily: number;            // 日常度浓度 0-100（平淡真实日常内容占比）
-  blockWords: string[];        // 屏蔽词（生成时回避）
-  // 玩家自定义分区（追加在内置 BILI_PARTITIONS 之后）+ 每个分区的独立引导提示词。
-  // catPrompts 的 key 用分区名（内置与自定义统一按 name 索引），value 是注入 feed/rank 生成的「该区要什么」引导文。
+  ecoErotic: number;           // 色情度浓度 0-100
+  ecoCarnal: number;           // 肉欲度浓度 0-100
+  ecoDaily: number;            // 日常度浓度 0-100
+  blockWords: string[];
   customCats: { id: string; name: string; icon: string }[];
   catPrompts: Record<string, string>;
 };
@@ -105,7 +96,6 @@ function read(): BiliData {
   if (!d || typeof d !== 'object') return { videos: [], history: [] };
   if (!Array.isArray(d.videos)) d.videos = [];
   if (!Array.isArray(d.history)) d.history = [];
-  // 为「玩家还没自定义过」的内置分区补默认引导提示词，玩家清空/改写后不再回填。
   if (!d.settings) d.settings = { ...DEFAULT_BILI_SETTINGS };
   d.settings.catPrompts = { ...BILI_DEFAULT_CAT_PROMPTS, ...(d.settings.catPrompts || {}) };
   return d;
@@ -160,7 +150,6 @@ export function toggleFavorite(id: string): void {
   v.favorited = !v.favorited;
   write(d);
 }
-// 三连：点赞 / 投币（收藏复用 toggleFavorite）。一键三连 = 三者一起置 true。
 export function toggleLike(id: string): void {
   const d = read(); const v = d.videos.find(x => x.id === id); if (!v) return;
   v.liked = !v.liked; write(d);
@@ -191,8 +180,6 @@ export function setDetail(id: string, p: { desc?: string; danmus?: BiliDanmu[]; 
 }
 export function clearAll(): void { const d = read(); write({ videos: [], history: [], ups: [], profile: d.profile, settings: d.settings }); }
 
-// 覆盖刷新：清掉「路人 AI 视频」后再生成一批。保留我的投稿、已收藏、已点赞/投币的视频，避免丢数据。
-// partName 给定时仅清该分区下的路人视频（分区刷新只覆盖本分区）。
 export function clearFeedVideos(partName?: string): void {
   const d = read();
   d.videos = d.videos.filter(v => {
@@ -206,14 +193,12 @@ export function clearFeedVideos(partName?: string): void {
   write(d);
 }
 
-// ---- UP 主名片 + 关注流 ----
-// UP 列表：已存档的名片优先，缺失的从视频里的 up 聚合补全（粉丝数等先空，点开主页 AI 补）。
+// UP 列表：已存档的名片优先，缺失的从视频里的 up 聚合补全
 export function getUps(): BiliUp[] {
   const d = read();
   const stored = Array.isArray(d.ups) ? d.ups : [];
   const byName = new Map<string, BiliUp>();
   for (const u of stored) byName.set(u.name, u);
-  // 从视频聚合出现过的 UP（没存档的补一个占位名片）
   for (const v of d.videos) {
     if (v.up && !byName.has(v.up)) byName.set(v.up, { name: v.up, ref: v.upRef, fans: '', followed: false });
   }
@@ -238,16 +223,13 @@ export function toggleFollowUp(name: string): boolean {
   return next;
 }
 export function getFollowedUps(): BiliUp[] { return getUps().filter(u => u.followed); }
-// 关注流：已关注 UP 的视频（按时间倒序）
 export function getDynamicVideos(): BiliVideo[] {
   const followed = new Set(getFollowedUps().map(u => u.name));
   return getVideos().filter(v => followed.has(v.up));
 }
-// UP 的所有视频
 export function getVideosByUp(name: string): BiliVideo[] { return getVideos().filter(v => v.up === name); }
 
-// ---- 分区 / 排行榜 / 玩家投稿 / 实时互动 / 个人资料 ----
-// 默认分区（进 app 即可见的常驻分类，参考真实 B站分区）。
+// 默认分区（进 app 即可见的常驻分类）
 export const BILI_PARTITIONS: { id: string; name: string; icon: string }[] = [
   { id: 'rec', name: '推荐', icon: 'fa-house' },
   { id: 'douga', name: '动画', icon: 'fa-clapperboard' },
@@ -270,9 +252,6 @@ export const BILI_PARTITIONS: { id: string; name: string; icon: string }[] = [
   { id: 'r18vlog', name: '私房vlog', icon: 'fa-gem' },
 ];
 
-// 每个内置分区的默认引导提示词（高信息密度、各分区独有），
-// 作为「该分区额外要求」注入 feed/rank 生成。玩家可在「分区管理」改写/清空，清空后不回填。
-// 写法：内容母题 + UP主画像 + 标题套路 + 招牌格式/钩子 + 拟真元数据口味 + 该区特有弹幕/生态。
 export const BILI_DEFAULT_CAT_PROMPTS: Record<string, string> = {
   '动画': '【动画区】内容母题：新番追番/吐槽/速看、国创/日漫/番剧解说、AMV燃向混剪、手书/同人动画、声优与配音、动画考据与彩蛋盘点、催更与意难平。UP主画像：追番党出锐评与排行、剪刀手出燃向AMV、同人作者发手书、考据党扒设定。标题套路：「这部新番封神了」「3分钟看懂xx」「当xx名场面配上这首歌」「【手书】xx」。招牌格式：解说视频时长偏长，混剪偏短而燃；配齐时长/播放量/分区=动画。弹幕生态：高能预警、名场面刷屏「name刷屏」、空降坐标、催更下一集、整齐排比刷梗。',
   '游戏': '【游戏区】内容母题：实况/攻略/速通、新游试玩、单机剧情流程、电竞赛事/操作集锦、整活/搞笑名场面、云玩家、回锅肉考古、外设评测。UP主画像：主播切片整活、攻略UP出保姆教程、电竞剪辑混剪高光、单机剧情党配解说。标题套路：「这波操作教科书」「全成就攻略（保姆级）」「当我把xx玩成了xx」「速通xx分钟」。招牌格式：攻略给步骤/配装/路线，实况偏长，集锦偏短燃；配齐时长/播放量（爆款可破百万）/分区=游戏。弹幕生态：「针不戳」「6666」「名场面」「云玩家路过」「指挥操作」「前方高能」。',
@@ -294,7 +273,6 @@ export const BILI_DEFAULT_CAT_PROMPTS: Record<string, string> = {
   '私房vlog': '【私房vlog区】内容母题：成人向私房/日常vlog——居家独处、睡前日常、浴后、健身私拍等带暧昧氛围的生活记录，主打「真实私密感+若隐若现的福利」，是「生活区」的成人镜像。UP主画像：颜值身材在线的女UP，靠真实私密感与亲近距离留人，镜头随性家居。标题套路：「睡前陪你说说话」「居家的一天vlog」「浴后碎碎念」，钩子落在私密日常与亲近感。招牌格式：vlog偏完整时长，节奏松弛暧昧，简介像写给「你」的私语；强调真实/私密/陪伴；配齐时长/播放量/分区=私房vlog。弹幕生态：「好近的感觉」「像女朋友」「treasure」「这也太私密了」「awsl」，氛围私密走心。',
 };
 
-// 把「12.3万 / 5.6w / 8765」量级文字粗略转成数字，用于排行榜排序。
 function viewsToNum(s: string): number {
   if (!s) return 0;
   const m = String(s).match(/([\d.]+)\s*([万wW亿]?)/);
@@ -305,7 +283,6 @@ function viewsToNum(s: string): number {
   if (unit === '亿') return n * 100000000;
   return n;
 }
-// 排行榜：按播放量量级排序取前 N（玩家投稿也参与）。
 // 传 partName 时只统计该分区的视频（分区排行榜）。
 export function getRanking(limit = 10, partName?: string): BiliVideo[] {
   let list = getVideos();
@@ -313,7 +290,6 @@ export function getRanking(limit = 10, partName?: string): BiliVideo[] {
   return list.slice().sort((a, b) => viewsToNum(b.views) - viewsToNum(a.views)).slice(0, limit);
 }
 
-// 玩家投稿：把玩家发布的视频入库（isMine=true，detailLoaded=true 直接成片）。
 export function addMyVideo(p: Partial<BiliVideo>): BiliVideo {
   const d = read();
   const v: BiliVideo = {
@@ -331,7 +307,6 @@ export function addMyVideo(p: Partial<BiliVideo>): BiliVideo {
 }
 export function getMyVideos(): BiliVideo[] { return getVideos().filter(v => v.isMine); }
 
-// 实时互动：往某视频追加弹幕 / 评论（玩家发的、或回响生成的，逐条追加不覆盖）。
 export function addDanmu(id: string, text: string, color?: string): void {
   const d = read(); const v = d.videos.find(x => x.id === id); if (!v) return;
   v.danmus.push({ id: rid('dm'), text, color });
@@ -348,7 +323,6 @@ export function appendComments(id: string, list: { author: string; content: stri
   write(d);
 }
 
-// ---- 个人资料 ----
 export function getProfile(): BiliProfile {
   const d = read();
   return { ...DEFAULT_BILI_PROFILE, ...(d.profile || {}) };
@@ -360,7 +334,6 @@ export function updateProfile(patch: Partial<BiliProfile>): BiliProfile {
   return d.profile;
 }
 
-// ---- 设置 ----
 export function getBiliSettings(): BiliSettings {
   const d = read();
   return { ...DEFAULT_BILI_SETTINGS, ...(d.settings || {}) };

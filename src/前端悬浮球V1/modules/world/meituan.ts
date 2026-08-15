@@ -1,11 +1,3 @@
-// 世界套件 —— 美团（meituan.ts）UI 模块
-// PC 三栏本地生活平台，真实美团质感（美团黄 #ffc300/#ff8000）。
-//   左栏：分区导航(附近/美食/奶茶甜点/食材/买药/到店团购/私密配送) + 购物车/订单/我的券/会员/消息/钱包/设置。
-//   中栏：商家瀑布流 / 商家详情(左菜单分类右菜品) / 结算 / 订单+骑手轨迹 / 团购券 / 会员签到 / 评价。
-//   右栏：购物车浮层 / 骑手对话 / 详情。
-// 全功能：外卖下单+骑手配送轨迹 / 到店团购券核销 / 投喂联系人(跨app推微信) / 会员签到霸王餐抽奖 /
-//   红包神券 / 评价生态 / 骑手对话 / app 内通知。
-// 注入走 input-box + 世界书；破限进 ordered_prompts[0]；分类提示词可编辑+AI重写+绑世界书。
 import { esc, escAttr, qs } from '../../lib/dom-utils';
 import { openModal2 } from '../../status-bar-init';
 import { phoneShellHtml, startPhoneClock } from '../../lib/world/phone-shell';
@@ -769,6 +761,7 @@ function serviceSheetHtml(): string {
   </div></div>`;
 }
 let _serviceLog: { who: 'me' | 'cs'; text: string }[] = [];
+let _mtDebounce: ReturnType<typeof setTimeout> | null = null;
 
 // ==================== 生成 ====================
 // __MT_GEN__
@@ -1042,8 +1035,8 @@ function bindRoot(): void {
     const t = ev.target as HTMLElement;
     // 生态滑块实时显示数值
     if (t.classList.contains('thw-range')) { const v = (t as HTMLInputElement).value; const cls = Array.from(t.classList).find(c => c.startsWith('thw-mt-eco-')); if (cls) { const el = rootEl()?.querySelector(`[data-eco-for="${cls}"]`); if (el) el.textContent = v; onEcoSlide(cls, Number(v)); } return; }
-    // 分类提示词即时落库
-    if (t.classList.contains('thw-mt-catprompt')) { const nm = t.getAttribute('data-cat-name') || ''; if (nm) setCatPrompt(nm, (t as HTMLTextAreaElement).value); return; }
+    // 分类提示词即时落库（防抖到输入停顿）
+    if (t.classList.contains('thw-mt-catprompt')) { const nm = t.getAttribute('data-cat-name') || ''; const val = (t as HTMLTextAreaElement).value; if (nm) { if (_mtDebounce) clearTimeout(_mtDebounce); _mtDebounce = setTimeout(() => setCatPrompt(nm, val), 220); } return; }
   });
   root.addEventListener('keydown', (ev: KeyboardEvent) => {
     const t = ev.target as HTMLElement;
@@ -1058,7 +1051,8 @@ function onEcoSlide(cls: string, v: number): void {
     'thw-mt-eco-city': 'ecoCity', 'thw-mt-eco-flavor': 'ecoFlavor', 'thw-mt-eco-speed': 'ecoSpeed',
     'thw-mt-eco-activity': 'ecoActivity', 'thw-mt-eco-erotic': 'ecoErotic', 'thw-mt-eco-carnal': 'ecoCarnal',
   };
-  const k = map[cls]; if (k) updateMtSettings({ [k]: Math.max(0, Math.min(200, v)) } as Partial<MtSettings>);
+  const k = map[cls];
+  if (k) { if (_mtDebounce) clearTimeout(_mtDebounce); _mtDebounce = setTimeout(() => updateMtSettings({ [k]: Math.max(0, Math.min(200, v)) } as Partial<MtSettings>), 220); }
 }
 function onSettingChange(t: HTMLElement): void {
   const cb = t as HTMLInputElement;

@@ -49,6 +49,7 @@ function normalize(s: any): PlacesState {
 }
 
 let _cache: PlacesState | null = null;
+let _placesRaw: string | null = null;
 
 // 历史迁移：把旧世界态里的 places 搬到独立存储（只做一次）。
 function migrateFromWstate(cur: PlacesState): PlacesState {
@@ -67,18 +68,22 @@ function migrateFromWstate(cur: PlacesState): PlacesState {
 }
 
 export function getPlacesState(): PlacesState {
-  if (_cache) return _cache;
+  const raw = localStorage.getItem(PLACES_LS_KEY);
+  if (_cache && raw === _placesRaw) return _cache;
+  _placesRaw = raw;
   let s = normalize(readWorldJson<any>(PLACES_LS_KEY, null));
   s = migrateFromWstate(s);
   _cache = s;
   // 迁移后落盘，标记 migrated，避免每次都读旧 wstate
   writeWorldJson(PLACES_LS_KEY, s);
+  _placesRaw = localStorage.getItem(PLACES_LS_KEY);
   return s;
 }
 export function savePlacesState(s: PlacesState): void {
   s.updatedAt = Date.now();
   const n = normalize({ ...s, migrated: true });
   _cache = n; writeWorldJson(PLACES_LS_KEY, n);
+  _placesRaw = localStorage.getItem(PLACES_LS_KEY);
 }
 export function getPlaces(): WPlace[] { return getPlacesState().places; }
 

@@ -1,17 +1,8 @@
-// 外观设置面板。
-// 13 项外观自定义 + data 属性重绑 + localStorage 持久化 + 平滑过渡。
-// 默认值 = 维持现状(糖果粉主题/标准字号/标准密度/标准动效/玻璃开/流光开/光环呼吸/标准圆角
-//   + 梦幻背景/标准阴影/标准饱和/标准行高/标准玻璃强度)。
-// 实现:给 wrapper 加 data-accent/data-density/data-motion/data-glass/data-mist/data-ring/data-radius
-//      /data-fontscale/data-bg/data-shadow/data-sat/data-lh 属性,CSS 用属性选择器重绑变量;
-//      换值时 wrapper 已有 transition 平滑过渡。
-// ================================================================
 import { esc, qs, qsa, gw } from '../lib/dom-utils';
 import { openModal2, closeModal2 } from '../status-bar-init';
 
 const LS_KEY = '_th_appearance_v1';
 
-// 强调色调色板(糖果系,只换 --pink 系,不引入 dark)
 type AccentKey = 'pink'|'lav'|'mint'|'sky'|'gold';
 const ACCENTS: Record<AccentKey,{label:string;swatch:string;vars:Record<string,string>}> = {
   pink: { label:'糖果粉', swatch:'#ff7b9d', vars:{ '--pink':'#ff7b9d','--pink2':'#ff9eb8','--pink3':'#ffe0ec','--pink4':'#fff0f6','--accent-pink':'#ff6090' } },
@@ -23,81 +14,68 @@ const ACCENTS: Record<AccentKey,{label:string;swatch:string;vars:Record<string,s
 
 export interface AppearanceSettings {
   accent: AccentKey;
-  fontScale: 's'|'m'|'l';       // 字号 小/标准/大
-  density: 'compact'|'normal'|'loose'; // 卡片密度
-  motion: 'off'|'light'|'normal'|'strong'; // 动效强度
-  glass: boolean;               // 玻璃模糊(总开关,保留兼容;强度由 glassBlur 控制)
-  mist: boolean;                // 背景流光薄雾
-  ring: 'breath'|'static';      // 头像光环
-  radius: 'soft'|'normal'|'sharp'; // 圆角风格
-  // ---- 扩展项 ----
-  bg: 'dream'|'pure'|'star'|'sakura'; // 背景主题
-  shadow: 'flat'|'soft'|'deep';       // 阴影深度
-  sat: 'pastel'|'normal'|'vivid';     // 饱和度
-  lh: 'tight'|'normal'|'airy';        // 行高
-  glassBlur: number;                  // 玻璃强度 0~16(px)
+  fontScale: 's'|'m'|'l';
+  density: 'compact'|'normal'|'loose';
+  motion: 'off'|'light'|'normal'|'strong';
+  glass: boolean;
+  mist: boolean;
+  ring: 'breath'|'static';
+  radius: 'soft'|'normal'|'sharp';
+  bg: 'dream'|'pure'|'star'|'sakura';
+  shadow: 'flat'|'soft'|'deep';
+  sat: 'pastel'|'normal'|'vivid';
+  lh: 'tight'|'normal'|'airy';
+  glassBlur: number;
 }
 
-// 默认值 = 维持现状
 const DEFAULTS: AppearanceSettings = {
   accent:'pink', fontScale:'m', density:'normal', motion:'normal',
   glass:true, mist:true, ring:'breath', radius:'normal',
   bg:'dream', shadow:'soft', sat:'normal', lh:'normal', glassBlur:12,
 };
 
-// 字号 → 根 font-size(px)
 const FONT_SIZE: Record<AppearanceSettings['fontScale'],string> = { s:'15px', m:'17px', l:'19px' };
-// 圆角风格 → --r/--rs/--rx(柔=更大,利=更小)
 const RADIUS: Record<AppearanceSettings['radius'],{r:string;rs:string;rx:string;rl:string}> = {
   soft:  { r:'26px', rs:'18px', rx:'14px', rl:'30px' },
   normal:{ r:'20px', rs:'14px', rx:'10px', rl:'24px' },
   sharp: { r:'12px', rs:'9px',  rx:'6px',  rl:'16px' },
 };
-// 密度 → 卡片 padding/gap
 const DENSITY: Record<AppearanceSettings['density'],string> = {
   compact:'6px 10px', normal:'8px 12px', loose:'12px 16px',
 };
 const DENSITY_GAP: Record<AppearanceSettings['density'],string> = {
   compact:'6px', normal:'8px', loose:'12px',
 };
-// 动效强度 → 时长缩放
 const MOTION_DUR: Record<AppearanceSettings['motion'],string> = {
   off:'0s', light:'0.12s', normal:'0.22s', strong:'0.38s',
 };
 const MOTION_ENV_DUR: Record<AppearanceSettings['motion'],string> = {
   off:'0s', light:'30s', normal:'20s', strong:'12s',
 };
-// 阴影深度 → --sh-1/2/3 三级海拔(flat 扁平/soft 柔和默认/deep 立体深影)
 const SHADOW: Record<AppearanceSettings['shadow'],{s1:string;s2:string;s3:string}> = {
   flat: { s1:'none', s2:'0 2px 8px rgba(160,100,140,0.06)', s3:'0 4px 16px rgba(160,100,140,0.1)' },
   soft: { s1:'0 4px 16px rgba(160,100,140,0.08), inset 0 1px 1px rgba(255,255,255,0.55)', s2:'0 12px 32px rgba(160,100,140,0.16), inset 0 1px 1px rgba(255,255,255,0.65)', s3:'0 24px 64px rgba(160,100,140,0.24), inset 0 1px 1px rgba(255,255,255,0.7)' },
   deep: { s1:'0 8px 24px rgba(160,100,140,0.16), inset 0 1px 1px rgba(255,255,255,0.5)', s2:'0 20px 48px rgba(160,100,140,0.28), inset 0 1px 1px rgba(255,255,255,0.6)', s3:'0 36px 80px rgba(160,100,140,0.4), inset 0 1px 1px rgba(255,255,255,0.65)' },
 };
-// 饱和度 → 整体 filter saturate + pink 系微调明度
 const SAT: Record<AppearanceSettings['sat'],{filter:string;pinkShift:number}> = {
-  pastel: { filter:'saturate(0.78) brightness(1.05)', pinkShift:-12 },  // 淡雅:降饱和提亮
+  pastel: { filter:'saturate(0.78) brightness(1.05)', pinkShift:-12 },
   normal: { filter:'none', pinkShift:0 },
-  vivid:  { filter:'saturate(1.25) brightness(0.98)', pinkShift:8 },    // 浓烈:增饱和
+  vivid:  { filter:'saturate(1.25) brightness(0.98)', pinkShift:8 },
 };
-// 行高 → wrapper line-height
 const LINE_HEIGHT: Record<AppearanceSettings['lh'],string> = {
   tight:'1.45', normal:'1.6', airy:'1.85',
 };
-// 玻璃强度 → --glass 透明度 + blur px(glassBlur=0 等同关玻璃)
 function glassAlpha(blur:number): string {
-  // blur 越大,底色越透明(更朦胧);blur=0 实色
   const a = blur<=0 ? 0.96 : Math.max(0.5, 0.92 - blur*0.025);
   return `rgba(255,255,255,${a.toFixed(2)})`;
 }
 
-// ---- 持久化 ----
 function loadSettings(): AppearanceSettings {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if(!raw) return { ...DEFAULTS };
     const p = JSON.parse(raw);
     const merged = { ...DEFAULTS, ...p };
-    // glassBlur 兜底:旧数据无此字段 → 默认 12;非数字/越界 → 钳制
     const gb = Number(merged.glassBlur);
     merged.glassBlur = (Number.isFinite(gb) ? Math.max(0, Math.min(16, gb)) : 12);
     return merged;
@@ -107,8 +85,6 @@ function saveSettings(s: AppearanceSettings): void {
   try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch(e){ void e; }
 }
 
-// ---- 应用到 wrapper ----
-// 给 wrapper 设置 data-* 属性 + inline CSS 变量,CSS 属性选择器据此重绑。
 export function applyAppearance(s: AppearanceSettings): void {
   const w = gw();
   if(!w) return;
@@ -116,7 +92,6 @@ export function applyAppearance(s: AppearanceSettings): void {
   w.setAttribute('data-fontscale', s.fontScale);
   w.setAttribute('data-density', s.density);
   w.setAttribute('data-motion', s.motion);
-  // glass 总开关:仅当 glassBlur>0 且 glass=true 才算开
   const glassOn = s.glass && s.glassBlur > 0;
   w.setAttribute('data-glass', glassOn ? 'on' : 'off');
   w.setAttribute('data-mist', s.mist?'on':'off');
@@ -126,7 +101,6 @@ export function applyAppearance(s: AppearanceSettings): void {
   w.setAttribute('data-shadow', s.shadow);
   w.setAttribute('data-sat', s.sat);
   w.setAttribute('data-lh', s.lh);
-  // inline 变量(覆盖 :root 默认)
   const accent = ACCENTS[s.accent] || ACCENTS.pink;
   const radius = RADIUS[s.radius] || RADIUS.normal;
   const shadow = SHADOW[s.shadow] || SHADOW.soft;
@@ -137,25 +111,20 @@ export function applyAppearance(s: AppearanceSettings): void {
     '--card-gap': DENSITY_GAP[s.density] || DENSITY_GAP.normal,
     '--ui-dur': MOTION_DUR[s.motion] || MOTION_DUR.normal,
     '--env-dur': MOTION_ENV_DUR[s.motion] || MOTION_ENV_DUR.normal,
-    // 阴影三级
     '--sh-1': shadow.s1, '--sh-2': shadow.s2, '--sh-3': shadow.s3,
-    // 玻璃强度(透明度随 blur 变;blur=0 实色)
     '--glass': glassAlpha(s.glassBlur),
     '--glass-blur': (glassOn ? s.glassBlur : 0) + 'px',
   };
   for(const [k,v] of Object.entries(vars)) w.style.setProperty(k, v);
   w.style.fontSize = FONT_SIZE[s.fontScale] || FONT_SIZE.m;
   w.style.lineHeight = LINE_HEIGHT[s.lh] || LINE_HEIGHT.normal;
-  // 饱和度:整体 filter(强调色 + 装饰一并调)
   w.style.filter = SAT[s.sat]?.filter || 'none';
 }
 
-// 启动时调用一次(由 setupStatusBar 调)
 export function initAppearance(): void {
   applyAppearance(loadSettings());
 }
 
-// ---- 面板 ----
 export function openAppearanceSettings(): void {
   const s = loadSettings();
   const h = renderAppearancePanel(s);
@@ -285,7 +254,6 @@ function toggleRow(key:string, label:string, on:boolean, icon:string): string {
 }
 
 function bindAppearanceEvents(s: AppearanceSettings): void {
-  // 强调色
   qsa('[data-acc-set]').forEach(btn=>btn.addEventListener('click',function(this:HTMLElement){
     const k = this.getAttribute('data-acc-set') as AccentKey;
     if(!k || !ACCENTS[k]) return;
@@ -293,7 +261,6 @@ function bindAppearanceEvents(s: AppearanceSettings): void {
     qsa('[data-acc-set]').forEach(b=>b.classList.toggle('active', b===this));
     applyAppearance(s); saveSettings(s);
   }));
-  // 分段按钮组(fontscale/density/motion/radius/sat/bg/lh/shadow)
   const segGroups: [keyof AppearanceSettings, string][] = [
     ['fontScale','fontscale'], ['density','density'], ['motion','motion'], ['radius','radius'],
     ['sat','sat'], ['bg','bg'], ['lh','lh'], ['shadow','shadow'],
@@ -307,7 +274,6 @@ function bindAppearanceEvents(s: AppearanceSettings): void {
       applyAppearance(s); saveSettings(s);
     }));
   }
-  // 头像光环(也是分段,attr=ring)
   qsa('[data-acc-ring]').forEach(btn=>btn.addEventListener('click',function(this:HTMLElement){
     const v = this.getAttribute('data-acc-ring') as AppearanceSettings['ring'];
     if(!v) return;
@@ -315,32 +281,28 @@ function bindAppearanceEvents(s: AppearanceSettings): void {
     qsa('[data-acc-ring]').forEach(b=>b.classList.toggle('active', b===this));
     applyAppearance(s); saveSettings(s);
   }));
-  // 开关(mist)
   qsa('[data-acc-toggle]').forEach(inp=>inp.addEventListener('change',function(this:HTMLInputElement){
     const k = this.getAttribute('data-acc-toggle') as 'mist';
     if(!k) return;
     (s as any)[k] = this.checked;
     applyAppearance(s); saveSettings(s);
   }));
-  // 滑块(glassBlur)
   const slider = qs<HTMLInputElement>('[data-acc-slider="glassBlur"]');
   const valEl = qs('#th-glass-val');
   slider?.addEventListener('input',function(this:HTMLInputElement){
     const v = Number(this.value);
     if(!Number.isFinite(v)) return;
     s.glassBlur = Math.max(0, Math.min(16, v));
-    s.glass = s.glassBlur > 0;  // 滑块拖到 0 自动关玻璃
+    s.glass = s.glassBlur > 0;
     if(valEl) valEl.textContent = String(s.glassBlur);
     applyAppearance(s); saveSettings(s);
   });
-  // 恢复默认
   qs('.th-appearance-reset')?.addEventListener('click',()=>{
     Object.assign(s, DEFAULTS);
     applyAppearance(s); saveSettings(s);
-    // 重渲染面板以同步所有控件态
+    toastr?.success?.('换回最初的样子啦');
     const body = qs('.th-modal-body-2');
     if(body){ body.innerHTML = renderAppearancePanel(s); setTimeout(()=>bindAppearanceEvents(s), 40); }
   });
-  // 完成
   qs('.th-appearance-done')?.addEventListener('click',()=>{ closeModal2(); });
 }
