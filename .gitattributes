@@ -1,5 +1,7 @@
 * text=auto eol=lf
 *.{cmd,[cC][mM][dD]} text eol=crlf
 *.{bat,[bB][aA][tT]} text eol=crlf
-
 dist/** merge=ours
+# 角色立绘原图走 git-lfs（GitHub 单文件 >100MB 上限；raw 访问会返回 LFS 指针，
+# 前端需用 media.githubusercontent.com/media/ 直链）
+src/前端悬浮球V1/角色图/*.png filter=lfs diff=lfs merge=lfs -text
