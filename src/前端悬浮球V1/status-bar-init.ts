@@ -189,11 +189,11 @@ let npcSearchText: string = ''; // NPC 搜索（姓名 + 身份），实时过�
 let rosterMode: 'row'|'card' = 'row';
 
 export function getCurrentStatusData(): Record<string,any>|null { return currentData; }
-// 角色立绘默认头像：33 名 NPC → GitHub LFS media 直链（public 仓库 iframe 匿名可加载）。
-// inline 显示走 512px 缩略图（原图 11-13MB，hover 瞬时窗口载不动）；点开看大图才用原图。
+// 角色立绘默认头像：33 名 NPC → GitHub 直链（public 仓库 iframe 匿名可加载）。
+// 原图 png 走 LFS media 直链（raw 返回指针文本）；inline 走 512px jpg 缩略图（非 LFS，raw 提供；原图 11-13MB，hover 瞬时窗口载不动）。
 // 中文目录/文件名已 percent 编码；仅 getter 兜底，不写入持久化变量（防 stat_data 膨胀、LFS 失效后卡死自定义头像）。
 const ROLE_AVATAR_BASE = 'https://media.githubusercontent.com/media/wqiansu/qiyue_cjtd_qianduan/main/src/%E5%89%8D%E7%AB%AF%E6%82%AC%E6%B5%AE%E7%90%83V1/%E8%A7%92%E8%89%B2%E5%9B%BE/';
-const ROLE_AVATAR_THUMB_BASE = 'https://media.githubusercontent.com/media/wqiansu/qiyue_cjtd_qianduan/main/src/%E5%89%8D%E7%AB%AF%E6%82%AC%E6%B5%AE%E7%90%83V1/%E8%A7%92%E8%89%B2%E5%9B%BE%E7%95%A5/';
+const ROLE_AVATAR_THUMB_BASE = 'https://raw.githubusercontent.com/wqiansu/qiyue_cjtd_qianduan/main/src/%E5%89%8D%E7%AB%AF%E6%82%AC%E6%B5%AE%E7%90%83V1/%E8%A7%92%E8%89%B2%E5%9B%BE%E7%BC%A9%E7%95%A5/';
 const ROLE_AVATAR_NAMES = ['伊蕾娜','叶惊霜','唐紫苏','婉音','师瑄瑄','幻琉璃','幽兰','明月歌','星露','晏舒秋','曹艾青','月曦','柳书意','梦清月','沐清雨','泠幽','清惜','玉含霜','白舞','秦筝','竹清清','红雨叶','绯樱','羽柔子','苏墨墨','虞初见','醉扶摇','钟瑾','陆雪琪','雪千璃','顾漫漫','顾雪酥','颜雪薇'];
 function roleAvatarUrl(name: string): string { return ROLE_AVATAR_BASE + encodeURIComponent(name) + '.png'; }
 function roleAvatarThumbUrl(name: string): string { return ROLE_AVATAR_THUMB_BASE + encodeURIComponent(name) + '.jpg'; }
