@@ -35,6 +35,7 @@ import {
   getNPCs,
   getCurrentStatusData,
   getAvatarImages,
+  getAvatarFullUrl,
   getStatusEditMode,
   setUploadingTarget,
   getAvatarColor,
@@ -85,7 +86,7 @@ export function bindNPCGridEvents(container:HTMLElement) {
     if(avatar){
       e.stopPropagation();
       const nm=avatar.getAttribute('data-avatar-target')||'';
-      const url=getAvatarImages()['npc:'+nm]||'';
+      const url=getAvatarFullUrl(getAvatarImages()['npc:'+nm]||'');
       if(url) showImage(url);
       else { setUploadingTarget('npc:'+nm); qs<HTMLInputElement>('.th-avatar-file-input')?.click(); }
       return;
@@ -594,7 +595,7 @@ export function openNPCDetail(npcName:string) {
     // 头像三键事件委托（替代原 inline onclick）：inline onclick 在 parent 文档上下文执行，
     //   window.__uploadTarget__ 落到 parent 窗口，iframe 内 change 处理器读不到 → NPC 上传错塞 user 头像。
     //   改委托后直接在 iframe 上下文调 setUploadingTarget/deleteAvatar/showImage，与 user 上传同链路。
-    qsa('[data-view-avatar]').forEach(el=>el.addEventListener('click',function(this:HTMLElement){const key=this.getAttribute('data-view-avatar')||'';const url=getAvatarImages()[key];if(url)showImage(url);}));
+    qsa('[data-view-avatar]').forEach(el=>el.addEventListener('click',function(this:HTMLElement){const key=this.getAttribute('data-view-avatar')||'';const url=getAvatarFullUrl(getAvatarImages()[key]||'');if(url)showImage(url);}));
     qsa('[data-upload-avatar]').forEach(btn=>btn.addEventListener('click',function(this:HTMLElement,e:Event){e.stopPropagation();const key=this.getAttribute('data-upload-avatar')||'';setUploadingTarget(key);qs<HTMLInputElement>('.th-avatar-file-input')?.click();}));
     qsa('[data-delete-avatar]').forEach(btn=>btn.addEventListener('click',function(this:HTMLElement){const key=this.getAttribute('data-delete-avatar')||'';deleteAvatar(key);closeModal();if(getCurrentStatusData())openNPCDetail(npcName);}));
     // 绑定弹窗内状态方块hover+click

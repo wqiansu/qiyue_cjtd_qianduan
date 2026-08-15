@@ -182,6 +182,29 @@ function tavern_sync(compiler: webpack.Compiler) {
   });
 }
 
+// 生产压缩偶发把 CSS 的 @charset 折叠成 U+FEFF 前缀，砸坏 scoped 样式首个选择器（position:fixed 失效），产出时剥掉。
+function stripBomFromAssets(): webpack.WebpackPluginInstance {
+  return {
+    apply(compiler: webpack.Compiler) {
+      compiler.hooks.thisCompilation.tap('strip-bom', compilation => {
+        compilation.hooks.processAssets.tap(
+          { name: 'strip-bom', stage: webpack.Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_INLINE },
+          assets => {
+            for (const [name, asset] of Object.entries(assets)) {
+              if (!/\.(js|css)$/.test(name)) continue;
+              const src = asset.source().toString();
+              const fixed = src.replace(/\\uFEFF/gi, '').replace(/\uFEFF/g, '');
+              if (fixed !== src) {
+                assets[name] = new webpack.sources.RawSource(fixed);
+              }
+            }
+          },
+        );
+      });
+    },
+  };
+}
+
 function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Configuration {
   const should_obfuscate = fs
     .readFileSync(path.join(import.meta.dirname, entry.script), 'utf-8')
@@ -446,6 +469,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
         ]
     )
       .concat(
+        stripBomFromAssets(),
         { apply: watch_tavern_helper },
         { apply: schema_dump },
         { apply: tavern_sync },
