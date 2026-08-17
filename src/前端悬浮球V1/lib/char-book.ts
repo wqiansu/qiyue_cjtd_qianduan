@@ -28,13 +28,6 @@ function rawCharBookEntries(): any[] {
   return entries;
 }
 
-// 角色卡是否可用内嵌世界书（有 getCharData 且能读到当前卡）。
-export function hasCharBook(): boolean {
-  const getCharData = getFn('getCharData');
-  if (!getCharData) return false;
-  try { return !!getCharData('current'); } catch { return false; }
-}
-
 // 读全部内嵌条目（归一为 CharBookEntry）。
 export function readCharBookEntries(): CharBookEntry[] {
   return rawCharBookEntries().map((e: any) => ({

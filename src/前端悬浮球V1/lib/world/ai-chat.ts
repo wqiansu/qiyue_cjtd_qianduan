@@ -9,13 +9,20 @@ import { genderDirective, imageWordsDirective } from './world-globals';
 import { getActiveWriterPersonaSegments } from './world-writer-persona';
 import { downgradeJailbreakForPersona } from './prompt-kit';
 
-// 一次性「system 追加」队列：各 app 的 maybeInjectWb 把勾选世界书文本压进来，
-//   下一次 chatGenerate 会把它拼进 system 并清空。仅对「紧接着的那一次生成」生效，用后即弃。
+// AI 正文标签统一措辞：去宿主黑话（世界书/角色书），换中立描述。
+const WB_CTX_LABEL = '【本作背景设定，供参考界定，勿逐字复述】';
+const WB_GLOBAL_LABEL = '【本作世界观通用背景，供参考界定，勿逐字复述】';
+const WB_APP_LABEL = '【本作相关设定，供参考界定，勿逐字复述】';
+
+// 一次性「system 追加」队列（逐 app 隔离）：各 app 的 maybeInjectWb 把勾选世界书文本压进来，
+//   下一次该 app 的 chatGenerate 会把它拼进 system 并清空。仅对「紧接着的那一次生成」生效，用后即弃。
 //   （不用深度注入：generateRaw 无 chat_history 锚点会丢失。）
-let _pendingSysInject = '';
-export function queueSysInject(text: string): void {
-  const t = (text || '').trim();
-  if (t) _pendingSysInject += (_pendingSysInject ? '\n\n' : '') + t;
+const _pendingSysInject = new Map<string, string>();
+export function queueSysInject(appId: string, body: string): void {
+  const t = (body || '').trim();
+  if (!t || !appId) return;
+  const cur = _pendingSysInject.get(appId) || '';
+  _pendingSysInject.set(appId, cur ? cur + '\n\n' + t : t);
 }
 
 // per-app 绑定世界书条目在 chatGenerate 里集中、无条件注入（不依赖各 app 在每个调用点手动 maybeInjectWb）。
@@ -106,7 +113,7 @@ export async function chatGenerate(args: {
   if (args.promptId) {
     try {
       const wb = await buildPromptWbContext(args.promptId);
-      if (wb && wb.trim()) sys = `${sys}\n\n【绑定世界书条目（背景设定，参考勿复述）】\n${wb.trim()}`;
+      if (wb && wb.trim()) sys = `${sys}\n\n${WB_CTX_LABEL}\n${wb.trim()}`;
     } catch (e) { void e; }
   }
   // 读取管理里勾的「全局世界书上下文」→ 作为全 app 通用背景注入。
@@ -115,17 +122,17 @@ export async function chatGenerate(args: {
     const ctxKeys: string[] = Array.isArray(gr?.ctxWbKeys) ? gr.ctxWbKeys : [];
     if (ctxKeys.length) {
       const ctxWb = await buildInjectFromKeys(ctxKeys);
-      if (ctxWb && ctxWb.trim()) sys = `${sys}\n\n【全局世界书上下文（世界观通用背景，参考勿复述）】\n${ctxWb.trim()}`;
+      if (ctxWb && ctxWb.trim()) sys = `${sys}\n\n${WB_GLOBAL_LABEL}\n${ctxWb.trim()}`;
     }
   } catch (e) { void e; }
-  // 一次性 system 追加（各 app 老式 maybeInjectWb/queueSysInject 压入的勾选世界书条目）——拼进 system 后清空。
+  // 一次性 system 追加（各 app 老式 maybeInjectWb/queueSysInject 压入的勾选世界书条目）——逐 app 消费后清空。
   //   先消费它，下面的集中注入才能据此去重（已接线的 app 不重复注入）。
-  if (_pendingSysInject) { sys = `${sys}\n\n${_pendingSysInject}`; _pendingSysInject = ''; }
+  const appId = args.appId || appIdFromPromptId(args.promptId);
+  const queued = _pendingSysInject.get(appId);
+  if (queued) { sys = `${sys}\n\n${WB_CTX_LABEL}\n${queued}`; _pendingSysInject.delete(appId); }
   // per-app 绑定世界书条目——集中、无条件注入（与全局同一实现 buildInjectFromKeys）。
-  //   从 args.appId（优先）或 promptId 前缀（'wechat.group'→'wechat'）解析 appId，取该 app 绑定条目统一注入。
   //   去重：若上面的 _pendingSysInject 已把同一批条目正文拼进来了（已接线的 app），就不再重复注入。
   try {
-    const appId = args.appId || appIdFromPromptId(args.promptId);
     const appKeys = getAppWbKeys(appId);
     if (appKeys.length) {
       const appWb = await buildInjectFromKeys(appKeys);
@@ -133,7 +140,7 @@ export async function chatGenerate(args: {
       // 去重：正文首段已在 sys 里（老接线注入过）则跳过，避免重复注入
       const probe = body.slice(0, 60);
       if (body && !(probe && sys.includes(probe))) {
-        sys = `${sys}\n\n【绑定世界书条目（本 app 设定，参考勿复述）】\n${body}`;
+        sys = `${sys}\n\n${WB_APP_LABEL}\n${body}`;
       }
     }
   } catch (e) { void e; }
@@ -180,7 +187,11 @@ export async function chatGenerate(args: {
     ordered_prompts: ordered,
     should_silence: true,
   };
-  if (args.jsonSchema) genCfg.json_schema = args.jsonSchema;
+  if (args.jsonSchema) {
+    // 契约要求 {name, value, ...} 包裹（@types/function/generate.d.ts JsonSchema）；裸 schema 自动补 name
+    const js = args.jsonSchema;
+    genCfg.json_schema = js && js.name ? js : { name: 'output', value: js };
+  }
   if (args.shouldStream) genCfg.should_stream = true; // 配合 onStreamToken 流式预览
   if (cfg.custom_api) genCfg.custom_api = cfg.custom_api;
   const ret = await generateRaw(genCfg);

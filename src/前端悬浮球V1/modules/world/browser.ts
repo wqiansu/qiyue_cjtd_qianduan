@@ -353,7 +353,7 @@ function ecoDirective(): string {
 async function maybeInjectWb(): Promise<void> {
   const cfg = getBrowserSettings();
   if (!cfg.worldbookEntryKeys.length) return;   // 勾了条目就注入
-  try { const text = await buildInjectFromKeys(cfg.worldbookEntryKeys); if (text) queueSysInject(`【绑定世界书条目（世界设定，参考勿复述）】\n${text.trim()}`); } catch (e) { void e; }
+  try { const text = await buildInjectFromKeys(cfg.worldbookEntryKeys); if (text) queueSysInject('browser', text); } catch (e) { void e; }
 }
 
 function timeLabel(ts: number): string {

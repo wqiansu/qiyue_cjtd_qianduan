@@ -359,7 +359,7 @@ function ecoDirective(): string {
 async function maybeInjectWb(): Promise<void> {
   const s = getTbSettings();
   if (!s.worldbookEntryKeys.length) return;   // 勾了条目就注入
-  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); if (text) queueSysInject(`【绑定世界书条目（世界设定，参考勿复述）】\n${text.trim()}`); } catch (e) { void e; }
+  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); if (text) queueSysInject('taobao', text); } catch (e) { void e; }
 }
 // 调用 AI 生成（带破限 system + promptId 自动并入提示词绑定世界书）
 async function callGen(promptId: string, user: string): Promise<string> {

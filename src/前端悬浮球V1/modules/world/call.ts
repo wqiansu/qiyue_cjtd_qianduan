@@ -5,16 +5,24 @@ import { phoneShellHtml, startPhoneClock } from '../../lib/world/phone-shell';
 import { iconHtml } from '../../lib/icons';
 import { registerWorldApp } from '../../lib/world/world-store';
 import { getContacts, type WorldContact } from '../../lib/world/contacts';
-import { sessionReply } from '../../lib/world/ai-chat';
+import { sessionReply, getTavernFloorCount } from '../../lib/world/ai-chat';
 import { ensureSession } from '../../lib/world/memory';
 import { registerPromptTemplate, getPromptText } from '../../lib/world/world-prompts';
 import { buildJailbreak, QUALITY_DIALOGUE } from '../../lib/world/prompt-kit';
-import { promptListPanelHtml, promptEditPanelHtml, bindPromptPanelClick, bindPromptWbHost } from './world-app-settings';
+import {
+  promptListPanelHtml, promptEditPanelHtml, bindPromptPanelClick, bindPromptWbHost,
+  wbSyncPanelHtml, bindWbSyncPanel, bindWbSyncPanelChange,
+  apiPlanPanelHtml, bindApiPlanPanel, bindApiPlanPanelChange,
+  appMemPanelHtml, bindAppMemPanel,
+} from './world-app-settings';
 import { wbPickerHtml, bindWbPicker } from '../../lib/world/wb-picker';
 import { isWorldbookAvailable } from '../../lib/world/worldbook';
 import { thConfirm, thToast } from '../../lib/world/ui-kit';
+import { runMemorySync } from '../../lib/world/wb-sync';
+import { openSessionMemory } from './memory-center';
+import { registerAutoAgent, shouldAutoTrigger } from '../../lib/world/auto-registry';
 import {
-  getRecords, getRecord, ensureRecord, addLine, markCallEnd, deleteRecord, clearAll,
+  getRecords, getRecord, ensureRecord, addLine, markCallEnd, markMissed, deleteRecord, clearAll,
   getCallSettings, updateCallSettings,
   type CallRecord,
 } from '../../lib/world/call-store';
@@ -197,6 +205,18 @@ function settingsInnerHtml(): string {
     <div class="th-cl-set-sec">${iconHtml('fa-book')} 绑定世界书（设定来源）</div>
     <div class="th-cl-set-hint">${wbReady ? '勾选要用的世界书条目即生效（作为对方角色/世界的权威设定并入生成），可跨多本书混选。' : '当前环境无世界书接口。'}</div>
     <div class="th-cl-wbpick" data-cl-wbpick-host>${wbReady ? wbPickerHtml(s.worldbookEntryKeys || []) : ''}</div>
+    <div class="th-cl-set-sec">${iconHtml('fa-upload')} 通话 → 角色卡世界书</div>
+    <div class="th-cl-set-hint">挂断后把本次通话沉淀成角色卡世界书条目，正文可读（禁递归）。</div>
+    ${wbSyncPanelHtml('call')}
+    <div class="th-cl-set-sec">${iconHtml('fa-gauge-high')} API 利用</div>
+    <div class="th-cl-set-hint">每次通话发言的产出项与条数，省 token。</div>
+    ${apiPlanPanelHtml('call')}
+    <div class="th-cl-set-sec">${iconHtml('fa-brain')} 记忆管理</div>
+    <button class="th-cl-btn" data-cl-set-memory type="button">${iconHtml('fa-brain')} 查看/编辑通话会话记忆</button>
+    ${appMemPanelHtml('call')}
+    <div class="th-cl-set-sec">${iconHtml('fa-bolt')} 楼层自动触发</div>
+    ${row('启用自动触发', '正文每推进设定楼数，随机一位联系人拨来一通未接来电', 'th-cl-set-autoen', s.autoInterval > 0)}
+    <label class="th-cl-frow"><span>每隔 N 楼</span><input type="number" min="1" max="200" class="th-cl-set-auto th-cl-field" value="${esc(String(s.autoInterval))}"></label>
     <div class="th-cl-set-sec">${iconHtml('fa-database')} 数据</div>
     <button class="th-cl-danger-btn" data-cl-clear type="button">${iconHtml('fa-trash')} 清空全部通话记录</button>
   </div>`;
@@ -296,6 +316,18 @@ function hangup(recordId: string): void {
   const dur = _callStart ? Math.max(1, Math.round((Date.now() - _callStart) / 1000)) : 0;
   markCallEnd(recordId, dur);
   _callStart = 0;
+  // 挂断后把本次通话沉淀成角色卡世界书条目（mode=off 时 runMemorySync 自行跳过）
+  try {
+    const rec = getRecord(recordId);
+    if (rec && rec.lines.length) {
+      const transcript = rec.lines.map(l => `${l.who === 'me' ? '我' : rec.peerName}：${l.text}`).join('\n');
+      void runMemorySync({
+        appId: 'call', appName: '通话', memType: '通话', memKey: 'call:' + recordId,
+        title: `与${rec.peerName}的通话`,
+        content: `【通话·${rec.peerName}】${dur ? `（${durLabel(dur)}）` : ''}\n${transcript}`,
+      });
+    }
+  } catch (e) { void e; }
   go({ name: 'list' });
 }
 
@@ -369,12 +401,20 @@ function bindRoot(): void {
     if (t.classList.contains('th-cl-set-floorcount')) { updateCallSettings({ floorCount: Math.max(1, Math.min(30, Number((t as HTMLInputElement).value) || 6)) }); return; }
     if (t.classList.contains('th-cl-set-bubbles')) { updateCallSettings({ maxBubbles: Math.max(1, Math.min(20, Number((t as HTMLInputElement).value) || 4)) }); return; }
     if (t.classList.contains('th-cl-set-mem')) { updateCallSettings({ memoryEnabled: (t as HTMLInputElement).checked }); return; }
+    if (t.closest('[data-wbsync-app]')) { if (bindWbSyncPanelChange(ev as Event)) return; }
+    if (t.closest('[data-apiplan-app]')) { bindApiPlanPanelChange(ev as Event); return; }
+    if (t.classList.contains('th-cl-set-autoen')) { updateCallSettings({ autoInterval: (t as HTMLInputElement).checked ? 20 : 0 }); render(); return; }
+    if (t.classList.contains('th-cl-set-auto')) { updateCallSettings({ autoInterval: Math.max(1, Math.min(200, Number((t as HTMLInputElement).value) || 0)) }); return; }
   });
 }
 
 function onSheetClick(t: HTMLElement, ev: Event): boolean {
   if (!_sheet) return false;
   if (_sheet.kind === 'settings') {
+    if (t.closest('[data-wbsync-app]')) { if (bindWbSyncPanel(ev)) return true; }
+    if (t.closest('[data-apiplan-app]')) { const reset = t.closest('[data-apiplan-reset]'); if (bindApiPlanPanel(ev)) { if (reset) render(); return true; } }
+    if (t.closest('[data-amem-app]')) { if (bindAppMemPanel(ev)) return true; }
+    if (t.closest('[data-cl-set-memory]')) { try { openSessionMemory(); } catch (e) { void e; } return true; }
     if (t.closest('[data-cl-clear]')) { void thConfirm({ title: '清空通话记录', message: '删除全部通话记录？设置保留。不可恢复。', danger: true, confirmText: '清空' }).then(ok => { if (ok) { clearAll(); render(); thToast('已清空通话记录', 'success'); } }); return true; }
     if (t.closest('[data-cl-wbpick-host]')) return true;
   }
@@ -403,6 +443,27 @@ function confirmDel(msg: string): boolean {
   try { return (getRoot() as any)?.confirm ? (getRoot() as any).confirm(msg) : confirm(msg); } catch (e) { void e; return confirm(msg); }
 }
 
+// ==================== 自动触发（每 N 楼来一通未接来电，非打扰，仅落记录）====================
+function spawnMissedCall(): void {
+  const cs = getContacts().filter(c => !c.isUser);
+  if (!cs.length) return;
+  const c = cs[Math.floor(Math.random() * cs.length)];
+  const r = ensureRecord({ contactId: c.id, peerName: c.name });
+  markMissed(r.id);
+  thToast(`${c.name} 拨来的未接来电`, 'info');
+}
+function maybeAutoCall(): void {
+  try {
+    if (!shouldAutoTrigger('call')) return;
+    const s = getCallSettings();
+    if (!s.autoInterval || s.autoInterval <= 0) return;
+    const cur = getTavernFloorCount();
+    if (cur - s.lastFloor < s.autoInterval) return;
+    updateCallSettings({ lastFloor: cur });
+    spawnMissedCall();
+  } catch (e) { void e; }
+}
+
 // ==================== 入口 ====================
 function openApp(): void {
   openModal2(`${iconHtml('fa-phone')} 通话`, phoneShellHtml({ rid: RID, appClass: 'th-cl' }), {
@@ -410,6 +471,7 @@ function openApp(): void {
   });
   startPhoneClock();
   bindRoot();
+  maybeAutoCall();
   render();
 }
 
@@ -423,6 +485,15 @@ registerWorldApp({
   id: 'call', name: '通话', icon: 'fa-phone',
   accent: 'linear-gradient(135deg,#22c55e,#16a34a)', order: 80, open: openCall,
   wbKeys: () => getCallSettings().worldbookEntryKeys || [],
+});
+
+// 自动触发登记
+registerAutoAgent({
+  id: 'call', name: '通话', icon: 'fa-phone', desc: '每 N 楼随机来一通未接来电',
+  getInterval: () => { try { return getCallSettings().autoInterval || 0; } catch (e) { void e; return 0; } },
+  setInterval: (n) => updateCallSettings({ autoInterval: n }),
+  getLastFloor: () => { try { return getCallSettings().lastFloor || 0; } catch (e) { void e; return 0; } },
+  fireNow: () => spawnMissedCall(),
 });
 
 try {

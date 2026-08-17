@@ -131,5 +131,5 @@ export function buildGenreBlock(key?: string): string {
   const g = getWorldGenre(key);
   return `【世界线题材·${g.name}】${g.toneHint}\n`
     + `· 组织层称「${g.orgLabel}」（如：${g.orgExamples}）；场所称「${g.venueLabel}」；评价体系用「${g.rankLabel}」；节庆时令偏「${g.festivalFlavor}」。\n`
-    + `· 以上是命名与风味的换装参考；具体的组织名/地名/人名/职能一律以绑定世界书为准，勿套用别卡的专名。`;
+    + `· 以上是命名与风味的换装参考；具体的组织名/地名/人名/职能一律以绑定设定为准，勿套用别卡的专名。`;
 }

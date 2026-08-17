@@ -698,7 +698,6 @@ function settingsDetailHtml(): string {
   // data
   const a = s.address;
   return `<div class="thw-sec"><div class="thw-sec-head"><span class="thw-sec-title">${iconHtml('fa-brain')} 会话记忆</span></div>
-      ${switchRow('启用会话记忆', '关闭后美团相关生成不带历史摘要上下文', 'thw-mt-cfg-mem', s.memoryEnabled)}
       ${switchRow('同步到世界书', '把下单/常去的商家写进角色卡主世界书，正文可读', 'thw-mt-cfg-sync', s.syncEnabled)}
     </div>
     <div class="thw-sec"><div class="thw-sec-head"><span class="thw-sec-title">${iconHtml('fa-sliders')} 本 app 记忆总结设置</span></div>
@@ -769,7 +768,7 @@ function mtJailbreak(): string { return (getPromptText('meituan.jailbreak') || '
 async function maybeInjectWb(): Promise<void> {
   const s = getMtSettings();
   if (!s.worldbookEntryKeys.length) return;   // 勾了条目就注入
-  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); if (text) queueSysInject(`【绑定世界书条目（世界设定，参考勿复述）】\n${text.trim()}`); } catch (e) { void e; }
+  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); if (text) queueSysInject('meituan', text); } catch (e) { void e; }
 }
 async function callGen(promptId: string, user: string): Promise<string> {
   await maybeInjectWb();
@@ -1060,7 +1059,6 @@ function onSettingChange(t: HTMLElement): void {
   else if (t.classList.contains('thw-mt-cfg-floorcount')) updateMtSettings({ floorCount: Math.max(0, Math.min(30, Number(cb.value) || 6)) });
   else if (t.classList.contains('thw-mt-cfg-auto-on')) { updateMtSettings({ autoInterval: cb.checked ? 10 : 0 }); render(); }
   else if (t.classList.contains('thw-mt-cfg-auto')) updateMtSettings({ autoInterval: Math.max(0, Number(cb.value) || 0) });
-  else if (t.classList.contains('thw-mt-cfg-mem')) updateMtSettings({ memoryEnabled: cb.checked });
   else if (t.classList.contains('thw-mt-cfg-sync')) updateMtSettings({ syncEnabled: cb.checked });
   else if (t.classList.contains('thw-mt-cfg-balance')) updateMtSettings({ balance: Math.max(0, Number(cb.value) || 0) });
 }

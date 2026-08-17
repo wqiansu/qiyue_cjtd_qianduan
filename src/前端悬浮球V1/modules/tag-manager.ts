@@ -86,7 +86,7 @@ export function openTagManagerModal(kind: ManagedKind, idPrefix: string) {
 
   h += `</div>`; // th-tag-manager 结束
 
-  openModal2(`<i class="fa-solid fa-tags"></i> 标签管理 · ${cfg.label}`, h);
+  openModal2(`<i class="fa-solid fa-tags"></i> 标签管理 · ${cfg.label}`, h, { replace: true });
 
   setTimeout(() => bindTagManagerEvents(kind, idPrefix), 60);
 }

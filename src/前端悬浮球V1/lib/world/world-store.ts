@@ -23,7 +23,9 @@ export const WORLD_LS_KEYS = {
   wkb: '_th_world_wkb_v1',                   // 工作台·通用AI造物机（模板/产物/设置，纯本地）
   places: '_th_world_places_v1',            // 地点簿（place-store.ts），导出/重置需纳入
   prompts: '_th_world_prompts_v1',        // 各 APP 提示词模板覆盖（world-prompts.ts）
+  theaterCfg: '_th_world_theater_cfg_v1', // 小剧场独立配置（theater-store.ts）
   wstate: '_th_world_wstate_v1',          // 结构化世界态（演化双模式，world-state-store.ts）
+  wstateCfg: '_th_world_wstate_config_v1', // 世界态独立配置（world-state-store.ts）
   wbsync: '_th_world_wbsync_v1',          // 各 APP 世界书注入配置（wb-sync.ts）
   apiplan: '_th_world_apiplan_v1',        // 各 APP API 利用配置（api-plan.ts）
   api: '_th_world_api_v1',                // 套件独立 API 预设列表（world-api.ts）
@@ -203,13 +205,15 @@ export function getWorldApp(id: string): WorldAppDef | undefined {
 // ==================== 整包导出 key 汇总 ====================
 // 返回所有应纳入整包导出的 _th_world_* key（固定 key + 按前缀扫描出的记忆 key）。
 export function getWorldStorageKeys(): string[] {
-  const keys: string[] = [WORLD_LS_KEYS.config, WORLD_LS_KEYS.contacts, WORLD_LS_KEYS.wechat, WORLD_LS_KEYS.evolution, WORLD_LS_KEYS.theater, WORLD_LS_KEYS.forum, WORLD_LS_KEYS.weibo, WORLD_LS_KEYS.tangxin, WORLD_LS_KEYS.mofang, WORLD_LS_KEYS.call, WORLD_LS_KEYS.bili, WORLD_LS_KEYS.red, WORLD_LS_KEYS.cal, WORLD_LS_KEYS.diary, WORLD_LS_KEYS.browser, WORLD_LS_KEYS.taobao, WORLD_LS_KEYS.meituan, WORLD_LS_KEYS.fanfan, WORLD_LS_KEYS.xmly, WORLD_LS_KEYS.places, WORLD_LS_KEYS.prompts, WORLD_LS_KEYS.wbsync, WORLD_LS_KEYS.apiplan, WORLD_LS_KEYS.api, WORLD_LS_KEYS.apiActive, WORLD_LS_KEYS.readcfg, WORLD_LS_KEYS.injectsel, WORLD_LS_KEYS.injectstash, WORLD_LS_KEYS.injectcustom, WORLD_LS_KEYS.memAppCfg, WORLD_LS_KEYS.catwb, WORLD_LS_KEYS.wkb, '_th_world_promptwb_v1', '_th_world_promptflags_v1', '_th_world_qualitycustom_v1', '_th_world_writer_persona_v1', '_th_world_evo_config_v1', '_th_world_clock_v1'];
+  const keys: string[] = [WORLD_LS_KEYS.config, WORLD_LS_KEYS.contacts, WORLD_LS_KEYS.wechat, WORLD_LS_KEYS.evolution, WORLD_LS_KEYS.theater, WORLD_LS_KEYS.theaterCfg, WORLD_LS_KEYS.forum, WORLD_LS_KEYS.weibo, WORLD_LS_KEYS.tangxin, WORLD_LS_KEYS.mofang, WORLD_LS_KEYS.call, WORLD_LS_KEYS.bili, WORLD_LS_KEYS.red, WORLD_LS_KEYS.cal, WORLD_LS_KEYS.diary, WORLD_LS_KEYS.browser, WORLD_LS_KEYS.taobao, WORLD_LS_KEYS.meituan, WORLD_LS_KEYS.fanfan, WORLD_LS_KEYS.xmly, WORLD_LS_KEYS.zui, WORLD_LS_KEYS.places, WORLD_LS_KEYS.prompts, WORLD_LS_KEYS.wstate, WORLD_LS_KEYS.wstateCfg, WORLD_LS_KEYS.wbsync, WORLD_LS_KEYS.apiplan, WORLD_LS_KEYS.api, WORLD_LS_KEYS.apiActive, WORLD_LS_KEYS.readcfg, WORLD_LS_KEYS.injectsel, WORLD_LS_KEYS.injectstash, WORLD_LS_KEYS.injectcustom, WORLD_LS_KEYS.memAppCfg, WORLD_LS_KEYS.catwb, WORLD_LS_KEYS.wkb, '_th_world_promptwb_v1', '_th_world_promptflags_v1', '_th_world_qualitycustom_v1', '_th_world_writer_persona_v1', '_th_world_evo_config_v1', '_th_world_clock_v1'];
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
       // 记忆中心：会话索引 + 每会话 blob 都以 memPrefix 开头，一并纳入
       if (k.startsWith(WORLD_LS_KEYS.memPrefix)) keys.push(k);
+      // 角色记忆池：池索引 + 每角色池 blob 都以 poolPrefix 开头，一并纳入
+      if (k.startsWith(WORLD_LS_KEYS.poolPrefix)) keys.push(k);
     }
   } catch (e) { void e; }
   return keys;

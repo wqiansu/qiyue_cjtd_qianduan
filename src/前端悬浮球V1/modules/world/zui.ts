@@ -113,7 +113,7 @@ function worldBlock(extra?: string): string {
     const seasonOn = ws.season.filter(x => x.status !== '已落幕').map(x => x.name);
     if (seasonOn.length) parts.push(`【当季大事】${seasonOn.join('、')}（可衍生相关话题梗与热帖）`);
     const rk = (ws.ranking?.entries || []).slice(0, 5).map(x => x.name).filter(Boolean);
-    if (rk.length) parts.push(`【万花镜当红】${rk.join('、')}（热榜/显眼包可呼应）`);
+    if (rk.length) parts.push(`【当下热榜】${rk.join('、')}（热榜/显眼包可呼应）`);
   } catch (e) { void e; }
   if (extra && extra.trim()) parts.push(extra.trim());
   return parts.length ? parts.join('\n\n') : '（暂无额外世界信息，按本卡世界观与常识发挥）';

@@ -107,6 +107,7 @@ export const INIT_LS_KEYS = {
   tags: '_th_tags_v1',
   stashKinds: '_th_stash_kinds_v1',
   groupCollapsed: '_th_group_collapsed_v1',
+  initCards: '_th_init_cards_v1',   // 初始卡片中间层（lib/init-cards.ts）
   aiPrompts: '_th_ai_prompts_v1',
   aiBuiltinOverrides: '_th_ai_builtin_overrides_v1',
   aiTaskpool: '_th_ai_taskpool_v1',

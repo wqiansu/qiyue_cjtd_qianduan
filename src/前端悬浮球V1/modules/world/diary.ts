@@ -17,6 +17,7 @@ import {
   bindWbSyncPanel, bindWbSyncPanelChange,
   apiPlanPanelHtml, bindApiPlanPanel, bindApiPlanPanelChange,
   injectPlanPanelHtml, bindInjectPlanPanel, bindInjectPlanPanelChange,
+  appMemPanelHtml, bindAppMemPanel,
   promptWbBindHtml, bindPromptWbHost,
   aiPromptEditorHtml, bindAiPromptEditor,
   patchSettingsDetail,
@@ -25,6 +26,7 @@ import { scaffoldNavHtml, normalizeScaffoldCats, type ScaffoldCatDef } from './s
 import { wbPickerHtml, bindWbPicker } from '../../lib/world/wb-picker';
 import { isWorldbookAvailable, buildInjectFromKeys } from '../../lib/world/worldbook';
 import { queueSysInject } from '../../lib/world/ai-chat';
+import { openSessionMemory } from './memory-center';
 import {
   getEntries, getEntry, getAllAuthors, getAllBooks, randomEntry, addEntry, updateEntry, deleteEntry, clearAll,
   toggleLock, getMoodTrail, getTagCloud,
@@ -360,7 +362,7 @@ function storyDateLabel(): string {
 async function maybeInjectWb(): Promise<void> {
   const s = getDiarySettings();
   if (!s.worldbookEntryKeys.length) return;   // 勾了条目就注入
-  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); if (text) queueSysInject(`【绑定世界书条目（世界设定，参考勿复述）】\n${text.trim()}`); } catch (e) { void e; }
+  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); if (text) queueSysInject('diary', text); } catch (e) { void e; }
 }
 function moodChip(id?: string, withLabel = true): string {
   const m = moodOf(id);
@@ -626,7 +628,12 @@ function settingsDetailHtml(): string {
     </div>`;
   }
   // data
-  return `<div class="thw-sec"><div class="thw-sec-head"><span class="thw-sec-title">${iconHtml('fa-database')} 数据管理</span></div>
+  return `<div class="thw-sec"><div class="thw-sec-head"><span class="thw-sec-title">${iconHtml('fa-brain')} 记忆管理</span></div>
+      <div class="thw-set-hint">日记相关记忆统一在「记忆」app 查看与管理。</div>
+      <button class="thw-btn" data-diary-set-memory type="button">${iconHtml('fa-brain')} 查看/编辑日记记忆</button>
+      ${appMemPanelHtml('diary')}
+    </div>
+    <div class="thw-sec"><div class="thw-sec-head"><span class="thw-sec-title">${iconHtml('fa-database')} 数据管理</span></div>
       <div class="thw-set-hint">清空会移除全部日记，保留设置偏好。</div>
       <button class="thw-btn thw-btn-danger" data-diary-clear type="button">${iconHtml('fa-trash')} 清空日记数据</button>
     </div>`;
@@ -950,6 +957,10 @@ function bindRoot(): void {
     const plEdit = t.closest('[data-diary-pl-edit]') as HTMLElement | null;
     if (plEdit) { _promptEditId = plEdit.getAttribute('data-diary-pl-edit') || ''; render(); return; }
 
+    // 记忆管理
+    if (t.closest('[data-diary-set-memory]')) { try { openSessionMemory('diary'); } catch (e) { void e; } return; }
+    if (t.closest('[data-amem-app]')) { if (bindAppMemPanel(ev as Event)) return; }
+
     // 清空
     if (t.closest('[data-diary-clear]')) { void thConfirm({ title: '清空日记数据', message: '删除全部日记？保留设置。不可恢复。', danger: true, confirmText: '清空' }).then(ok => { if (ok) { clearAll(); _center = { name: 'empty' }; _showSettings = false; render(); thToast('已清空', 'success'); } }); return; }
   });
@@ -971,6 +982,7 @@ function bindRoot(): void {
     if (t.closest('[data-wbsync-app]')) { bindWbSyncPanelChange(ev as Event); }
     if (t.closest('[data-apiplan-app]')) { bindApiPlanPanelChange(ev as Event); }
     if (t.closest('[data-inj-app]')) { bindInjectPlanPanelChange(ev as Event); }
+    if (t.closest('[data-amem-app]')) { bindAppMemPanel(ev as Event); }
     if (t.classList.contains('thw-diary-ed-lock')) { _editLocked = (t as HTMLInputElement).checked; return; }
     if (t.classList.contains('thw-diary-cfg-floors')) { updateDiarySettings({ useFloors: (t as HTMLInputElement).checked }); return; }
     if (t.classList.contains('thw-diary-cfg-floorcount')) { updateDiarySettings({ floorCount: Math.max(0, Math.min(60, Number((t as HTMLInputElement).value) || 8)) }); return; }    if (t.classList.contains('thw-diary-cfg-autoen')) {

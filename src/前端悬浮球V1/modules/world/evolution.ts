@@ -1470,6 +1470,7 @@ async function evoToWechat(actorId: string, entryId: string): Promise<void> {
         + '现在你想用微信主动找「我」聊这件事。请发一条简短、自然、像真人开场的微信消息（带着你此刻的心情和这段经历的余温），别太长，不要旁白、不要括号心理、不要引号。直接给消息正文。',
       user: '发一条想找我聊的微信开场消息。',
       aiPresetName: getEvoConfig().aiPresetName || undefined,
+      jailbreak: evoJailbreak(),
       qualityBlocks: QUALITY_DIALOGUE,
     });
     const msg = (text || '').trim().replace(/^["「]|["」]$/g, '') || `欸，在吗？刚发生了点事想跟你说…`;
@@ -1515,6 +1516,7 @@ async function maybeRipple(o: { actorName: string; isWorld: boolean; reflow: Evo
               + '现在你想用微信主动找「我」聊这件事。发一条简短自然、像真人开场的微信消息（带此刻心情），别太长，不要旁白、不要括号心理、不要引号，直接给正文。',
             user: '发一条想找我聊的微信开场消息。',
             aiPresetName: getEvoConfig().aiPresetName || undefined,
+            jailbreak: evoJailbreak(),
             qualityBlocks: QUALITY_DIALOGUE,
           });
           const msg = (text || '').trim().replace(/^["「]|["」]$/g, '');

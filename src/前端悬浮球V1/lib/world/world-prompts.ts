@@ -116,7 +116,7 @@ export async function buildCatWbContext(appId: string, catName: string): Promise
   try { return (await buildInjectFromKeys(keys)) || ''; } catch (e) { void e; return ''; }
 }
 
-// ---- 渲染：把 {{key}} 替换为 vars[key]（缺失留空，未知占位符原样保留以便排错）----
+// ---- 渲染：把 {{key}} 替换为 vars[key]（缺失抹空，未知占位符留痕以便排错）----
 export function renderPrompt(id: string, vars: Record<string, string | number | undefined>): string {
   const tpl = getPromptText(id);
   return fillTemplate(tpl, vars);

@@ -40,7 +40,7 @@ import {
   Lightbulb, LocateFixed, Send, Square,
   // 全量 Lucide 迁移收尾——补全最后 11 个缺失 fa 图标(消除残留 th-ico-missing 白方块)
   // lucide-static 无 CircleHalf / Stream：前者改用 Contrast(半明半暗圆)，后者复用下方已导入的 Waves。
-  Contrast, CircleX, Grip, Cpu, Plug,
+  Contrast, CircleX, Grip, Cpu, Plug, Crop,
   Snowflake, Baseline, Wind,
   // 补全初始化管理/写入写出/激活监控/导出条目/锁定等白方块图标
   ArrowRight, ArrowDownToLine, LogIn, LogOut, ArrowUp,
@@ -580,6 +580,7 @@ const ICONS: Record<string, string> = {
   'message-heart':            inner(MessageSquareHeart),    // 点歌留言/声音礼物
   'boxes-stacked':            inner(Boxes),                 // 堆叠箱/库存
   'plug-circle-check':        inner(Plug),                  // 插头已连
+  'crop-simple':              inner(Crop),                  // 读取管理·提取标签
 };
 void HeartIcon; void ShoppingCart; void MessageCircle; void Theater; void Receipt; void Shield;
 
@@ -603,13 +604,20 @@ export function iconHtml(name: string, size: number | string = '1em'): string {
 }
 
 /**
- * 字符串后处理：把所有 `<i class="fa-X fa-Y"></i>` 自动换成 lucide SVG。
+ * 字符串后处理：把所有 `<i class="fa-X ... fa-Y"></i>` 自动换成 lucide SVG。
  * 状态栏里所有 innerHTML 模板字面量都过一遍。
+ * 只处理含 fa- 前缀类的空 `<i>`；取第一个非修饰性 fa- 类作图标，未知映射保留原样（父页 FontAwesome 兜底）。
  */
+const FA_MODS = /^(fa-solid|fa-regular|fa-brands|fa-light|fa-thin|fa-duotone|fa-spin|fa-pulse|fa-fw|fa-lg|fa-sm|fa-xs|fa-xl|fa-2x|fa-3x|fa-4x|fa-5x|fa-flip|fa-beat|fa-fade|fa-rotate-\d+)$/;
 export function stripFa(s: unknown): string {
   if (typeof s !== 'string' || !s) return s as string;
-  return s.replace(
-    /<i\s+class="(fa-(?:solid|regular|brands|light|thin)\s+fa-[a-z0-9-]+)"\s*><\/i>/gi,
-    (_, cls) => iconHtml(cls),
-  );
+  return s.replace(/<i\s+class="([^"]*)"\s*><\/i>/gi, (tag, clsRaw: string) => {
+    const cls = (clsRaw || '').trim();
+    if (!cls || !cls.includes('fa-')) return tag;
+    const word = cls.split(/\s+/).find(w => w.startsWith('fa-') && !FA_MODS.test(w)) || cls.split(/\s+/).find(w => w.startsWith('fa-')) || '';
+    if (!word) return tag;
+    const key = word.startsWith('fa-') ? word.slice(3) : word;
+    if (!(key in ICONS)) return tag;
+    return iconHtml(word);
+  });
 }

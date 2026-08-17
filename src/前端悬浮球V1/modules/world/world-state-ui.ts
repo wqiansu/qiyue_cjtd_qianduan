@@ -385,6 +385,7 @@ export function wstateSettingsPanelHtml(): string {
 
     <div class="th-ws-set-g">${iconHtml('fa-book-open')} 正文参考</div>
     <label class="th-ws-frow"><span>推演时附带最近几楼正文（0=不读）</span><input type="number" min="0" class="th-ws-field th-ws-s-floors" value="${esc(String(cfg.readFloors))}"></label>
+    <label class="th-ws-frow"><span>把世界态注入正文（持久注入，供酒馆生成参考）</span><input type="checkbox" class="th-ws-field th-ws-s-inject" ${cfg.injectOn ? 'checked' : ''}></label>
 
     <div class="th-ws-set-g">${iconHtml('fa-feather')} 语气 / 笔调预设（可选）</div>
     <label class="th-ws-frow th-ws-frow-stack"><span>附加到每次推演，统一笔调</span><textarea class="th-ws-field th-ws-s-tone" rows="2" placeholder="如：多写吐槽与玩梗，网感拉满，甜度再高一点。">${esc(cfg.tonePrompt || '')}</textarea></label>

@@ -144,7 +144,7 @@ const SEED_DEFAULT =
   '· 用真名真设定：宫殿/仙主/弟子/社团/综艺/职务全部取自「设定速记」花名册，别造设定里没有的人。谁在哪个宫、谁管哪个社团要对得上。\n' +
   '· 有前情有勾连：线索之间彼此呼应（某综艺在录 → 打榜名次因此变动 → 某宫为此忙 → 衍生八卦），像一个真在运转的世界，而非互不相干的条目堆砌。\n' +
   '· 处于半途：大多数线索不要停在「刚开始」，让它们分布在苗头/发酵/高潮各阶段，营造「世界一直在活」的既视感。\n' +
-  '· 若附带了绑定世界书原文或最近剧情，据其中的地点、人物关系、当前时节来对齐开局，不要与之矛盾。\n' +
+  '· 若附带了绑定设定原文或最近剧情，据其中的地点、人物关系、当前时节来对齐开局，不要与之矛盾。\n' +
   '· 基调铁律照旧：明亮甜蜜无厘头喜剧，无阴暗面。\n\n' +
   '【重要·字段必须一字不差照下面的说明来】开局与「世界态推演」共用同一套字段契约。务必用下面列出的确切字段名（threads 用 name/stage/heat/desc，不是 subject/summary；ranking/subRankings 用 entries 不是 items；rivalries 用 who/over/stage/desc 不是 parties/conflict；palaceEntities 用 name/duty/recent/mood；ambience3 每维用 words[]/line；identities 是数组 [{name,academy,palace}] 不是对象映射；charm 用 beauty/soul/rank/topic/lastChange；vibe 用 mood/signals[{summary,scope}]），字段名写错的维度会被系统整段丢弃、白建一遍。digest 写一段 180-220 字、有画面感的「仙宫此刻群像速写」，禁止提到主角（{{user}}）。\n\n';
 registerPromptTemplate({

@@ -283,7 +283,7 @@ function worldInfoBlock(): string {
 async function buildCalWbInject(): Promise<string> {
   const s = getCalSettings();
   if (!s.worldbookEntryKeys.length) return '';
-  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); return text ? `\n\n【绑定世界书条目（世界设定，参考勿复述）】\n${text.trim()}` : ''; } catch (e) { void e; return ''; }
+  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); return text ? `\n\n【本作背景设定，供参考界定，勿逐字复述】\n${text.trim()}` : ''; } catch (e) { void e; return ''; }
 }
 function weekDays(): { y: number; m: number; d: number; dk: string }[] {
   const base = new Date(_selDate + 'T00:00:00');

@@ -195,7 +195,6 @@ export function getCurrentStatusData(): Record<string,any>|null { return current
 const ROLE_AVATAR_BASE = 'https://media.githubusercontent.com/media/wqiansu/qiyue_cjtd_qianduan/main/src/%E5%89%8D%E7%AB%AF%E6%82%AC%E6%B5%AE%E7%90%83V1/%E8%A7%92%E8%89%B2%E5%9B%BE/';
 const ROLE_AVATAR_THUMB_BASE = 'https://raw.githubusercontent.com/wqiansu/qiyue_cjtd_qianduan/main/src/%E5%89%8D%E7%AB%AF%E6%82%AC%E6%B5%AE%E7%90%83V1/%E8%A7%92%E8%89%B2%E5%9B%BE%E7%BC%A9%E7%95%A5/';
 const ROLE_AVATAR_NAMES = ['伊蕾娜','叶惊霜','唐紫苏','婉音','师瑄瑄','幻琉璃','幽兰','明月歌','星露','晏舒秋','曹艾青','月曦','柳书意','梦清月','沐清雨','泠幽','清惜','玉含霜','白舞','秦筝','竹清清','红雨叶','绯樱','羽柔子','苏墨墨','虞初见','醉扶摇','钟瑾','陆雪琪','雪千璃','顾漫漫','顾雪酥','颜雪薇'];
-function roleAvatarUrl(name: string): string { return ROLE_AVATAR_BASE + encodeURIComponent(name) + '.png'; }
 function roleAvatarThumbUrl(name: string): string { return ROLE_AVATAR_THUMB_BASE + encodeURIComponent(name) + '.jpg'; }
 export function getAvatarImages(): Record<string,string> {
   let missing = false;
@@ -2251,11 +2250,9 @@ export async function setupStatusBar(): Promise<{ destroy: () => void }> {
   const w_any = window as any;
   const p_any = (() => { try { return window.parent as any; } catch(e){ void e; return null; } })();
   w_any.__uploadTarget__ = '';
-  w_any.__deleteAvatar__ = (t:string)=>{ deleteAvatar(t); };
   if (p_any && p_any !== w_any) {
     try {
       p_any.__uploadTarget__ = '';
-      p_any.__deleteAvatar__ = (t:string)=>{ deleteAvatar(t); };
       p_any.__galleryTarget__ = '';
     } catch(e){ void e; }
   }

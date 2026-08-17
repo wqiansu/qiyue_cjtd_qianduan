@@ -525,7 +525,7 @@ async function buildWbInject(): Promise<string> {
   const s = getSettings();
   if (!(s.worldbookEntryKeys || []).length) return '';   // 勾了条目就注入
   const body = await buildInjectFromKeys(s.worldbookEntryKeys || []);
-  return body ? `\n\n【世界书/角色书信息】\n${body}` : '';
+  return body ? `\n\n【本作背景设定，供参考界定，勿逐字复述】\n${body}` : '';
 }
 function tangxinJailbreak(): string { return (getPromptText('tangxin.jailbreak') || '').trim(); }
 function cover(name: string): string {

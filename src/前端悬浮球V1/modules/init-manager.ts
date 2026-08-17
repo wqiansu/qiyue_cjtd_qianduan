@@ -457,6 +457,12 @@ async function exportInitBackup(): Promise<void> {
     let tags: unknown = null;
     const tagsRaw = localStorage.getItem(INIT_LS_KEYS.tags);
     if (tagsRaw) { try { tags = JSON.parse(tagsRaw); } catch { tags = tagsRaw; } }
+    let stashKinds: unknown = null;
+    const stashRaw = localStorage.getItem(INIT_LS_KEYS.stashKinds);
+    if (stashRaw) { try { stashKinds = JSON.parse(stashRaw); } catch { stashKinds = stashRaw; } }
+    let initCards: unknown = null;
+    const cardsRaw = localStorage.getItem(INIT_LS_KEYS.initCards);
+    if (cardsRaw) { try { initCards = JSON.parse(cardsRaw); } catch { initCards = cardsRaw; } }
     const backup = {
       format: INIT_BACKUP_FORMAT,
       version: 1,
@@ -464,6 +470,8 @@ async function exportInitBackup(): Promise<void> {
       initEntries,
       managed,
       tags,
+      stashKinds,
+      initCards,
       linksGraph: loadLinksGraph(),
     };
     downloadText('初始化备份_' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(backup, null, 2));
@@ -503,6 +511,8 @@ async function restoreInitBackup(backup: any, mode: 'init' | 'local' | 'all'): P
         localCount++;
       }
       if (backup.tags != null) { localStorage.setItem(INIT_LS_KEYS.tags, typeof backup.tags === 'string' ? backup.tags : JSON.stringify(backup.tags)); localCount++; }
+      if (backup.stashKinds != null) { localStorage.setItem(INIT_LS_KEYS.stashKinds, typeof backup.stashKinds === 'string' ? backup.stashKinds : JSON.stringify(backup.stashKinds)); localCount++; }
+      if (backup.initCards != null) { localStorage.setItem(INIT_LS_KEYS.initCards, typeof backup.initCards === 'string' ? backup.initCards : JSON.stringify(backup.initCards)); localCount++; }
     }
   } catch (e) { return { init: initCount, local: localCount, err: (e as Error).message }; }
   return { init: initCount, local: localCount };
@@ -797,8 +807,10 @@ const PACK_EXTRA_KEYS = [
   INIT_LS_KEYS.aiPrompts, INIT_LS_KEYS.aiBuiltinOverrides, INIT_LS_KEYS.aiPlans, INIT_LS_KEYS.aiStyle,
   INIT_LS_KEYS.aiStylesCustom, INIT_LS_KEYS.aiStyleOverrides, INIT_LS_KEYS.aiPersonas,
   INIT_LS_KEYS.aiPersonaOverrides, INIT_LS_KEYS.aiPersonaActive, INIT_LS_KEYS.presetenvActive,
+  INIT_LS_KEYS.aiTaskpool, INIT_LS_KEYS.aiSnapshots, INIT_LS_KEYS.aiLastPrompt, INIT_LS_KEYS.aiLastDrill,
   INIT_LS_KEYS.aiIncrMap, INIT_LS_KEYS.aiIncrEnabled, INIT_LS_KEYS.aiJailbreaks, INIT_LS_KEYS.aiJbOverrides, INIT_LS_KEYS.aiJbActive,
   '_th_init_cards_v1',
+  '_th_custom_tokens',
   ...INIT_LS_KEYS.mapKeys,
 ];
 

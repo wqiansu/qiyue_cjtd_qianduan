@@ -907,7 +907,7 @@ async function sendOneBucket(
       user_input: userInput,
       // ordered_prompts 自定义预设，绕开酒馆 RP 预设([Start a new chat])与绑定世界书
       ordered_prompts: ordered,
-      json_schema: buildJsonSchema(b.kind),
+      json_schema: { name: 'ai_summary', value: buildJsonSchema(b.kind) },
       should_silence: true,
       should_stream: true,
     };
@@ -1090,7 +1090,7 @@ function openInjectConfirm(results: BucketResult[]): void {
     const wbMode = (qs<HTMLSelectElement>('#th-ai-wb-mode')?.value || 'dedupe') as InitialWriteMode;
     const picks = collectPicks(injectables);
     if (!picks.length) { toastr?.warning?.('未勾选任何项'); return; }
-    void doInject(injectables, picks, writeback, wbMode);
+    void doInject(injectables, picks, writeback, wbMode, results.flatMap(r => r.taskIds || []));
   });
   qs('#th-ai-inj-ctx')?.addEventListener('click', () => {
     const picks = collectPicks(injectables);
@@ -1200,6 +1200,7 @@ async function doInject(
   picks: { idx: number; conflict: 'skip' | 'overwrite' | 'merge' | 'copy' }[],
   writeback: boolean,
   wbMode: InitialWriteMode,
+  taskIds: string[],
 ): Promise<void> {
   let injected = 0, skipped = 0, copied = 0, merged = 0;
   const wbByKind = new Map<ManagedKind, InitialWriteItem[]>();
@@ -1260,7 +1261,8 @@ async function doInject(
 
   closeModal2();
   toastr?.success?.(`已注入 ${injected} 项${merged ? `、合并 ${merged} 项` : ''}${copied ? `、建副本 ${copied} 项` : ''}${skipped ? `、跳过 ${skipped} 项` : ''}${wbSummary}`);
-  clearTasks();
+  // 只清本轮已执行的任务（按 taskId），其它排队任务保留
+  for (const id of taskIds) { try { removeTask(id); } catch (e) { void e; } }
   renderPanel();
 }
 

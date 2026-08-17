@@ -371,7 +371,7 @@ function castBlock(): string {
 async function maybeInjectWb(): Promise<void> {
   const s = getBiliSettings();
   if (!s.worldbookEntryKeys.length) return;   // 勾了条目就注入
-  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); if (text) queueSysInject(`【绑定世界书条目（世界设定，参考勿复述）】\n${text.trim()}`); } catch (e) { void e; }
+  try { const text = await buildInjectFromKeys(s.worldbookEntryKeys); if (text) queueSysInject('bili', text); } catch (e) { void e; }
 }
 // 我与某 UP 的关系（用于回响里的「老粉」上下文）
 function relationToUp(up: string): string {

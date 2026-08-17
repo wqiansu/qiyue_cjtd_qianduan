@@ -212,13 +212,13 @@ registerPromptTemplate({
 // 超话 / CP 超话（磕学家文化，贴合全女百合喜剧）
 registerPromptTemplate({
   id: 'weibo.super', appId: 'weibo', appName: '微博', name: '超话广场',
-  desc: '生成一批贴合世界的超话/CP超话词条（个人超话、CP超话、话题超话），供超话广场展示。磕学家文化拉满，契合霜月仙宫全女百合日常喜剧。',
+  desc: '生成一批贴合世界的超话/CP超话词条（个人超话、CP超话、话题超话），供超话广场展示。磕学家文化拉满，契合本作全女百合日常喜剧。',
   vars: [
     { key: 'cast', desc: '世界里的角色（可作超话主角/CP）' },
     { key: 'worldBlock', desc: '世界信息' },
     { key: 'count', desc: '生成几个超话' },
   ],
-  default: '请为这个世界生成 {{count}} 个微博超话词条。超话是粉丝聚集地——有人为某位仙主建个人超话产粮控评，有人嗑两位仙主的 CP 建 CP 超话日夜上香，也有就某个现象建的话题超话。\n\n【世界里的人】\n{{cast}}\n\n【此刻的世界】\n{{worldBlock}}\n\n'
+  default: '请为这个世界生成 {{count}} 个微博超话词条。超话是粉丝聚集地——有人为某位角色建个人超话产粮控评，有人嗑两位角色的 CP 建 CP 超话日夜上香，也有就某个现象建的话题超话。\n\n【世界里的人】\n{{cast}}\n\n【此刻的世界】\n{{worldBlock}}\n\n'
     + WB_PUBLIC_RULE + '\n\n'
     + '【超话要像真超话】混合三类：个人超话（star，捧某位角色）、CP超话（cp，嗑两位角色的组合，名字常用「AxB」「A×B」或带糖/锁字）、话题超话（topic，某现象/事件）。每个给一句有粉圈黑话、磕学家味儿的简介（产粮/上香/嗑到了/我搞CP姓X/不许拆等），贴合世界设定与角色关系，明亮甜系不致郁。可点缀粉圈日常活动（今日签到打卡、冲榜打投、控评模板、应援集资），让超话有「活人在运营」的氛围。\n'
     + '【数据】给每个超话一个帖量量级感（posts，整数，如 12000）。\n'
@@ -480,7 +480,7 @@ async function buildWeiboWorldbookInject(): Promise<string> {
   const keys = s.worldbookEntryKeys || [];
   if (keys.length) {
     const body = await buildInjectFromKeys(keys);
-    return body ? `\n\n【世界书/角色书信息】\n${body}` : '';
+    return body ? `\n\n【本作背景设定，供参考界定，勿逐字复述】\n${body}` : '';
   }
   // 兼容旧整本绑定
   if (!s.worldbookIds.length) return '';
@@ -492,7 +492,7 @@ async function buildWeiboWorldbookInject(): Promise<string> {
       if (body) chunks.push(`【${book}】\n${body}`);
     } catch (e) { void e; }
   }
-  return chunks.length ? `\n\n【世界书/角色书信息】\n${chunks.join('\n\n')}` : '';
+  return chunks.length ? `\n\n【本作背景设定，供参考界定，勿逐字复述】\n${chunks.join('\n\n')}` : '';
 }
 
 function timeLabel(ts: number): string {

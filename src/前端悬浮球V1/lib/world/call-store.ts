@@ -23,9 +23,11 @@ export type CallSettings = {
   maxBubbles: number;          // 对方一次最多说几句
   memoryEnabled: boolean;
   worldbookEntryKeys: string[];
+  autoInterval: number;        // 每 N 楼自动来一通未接来电（0=关）
+  lastFloor: number;           // 上次自动触发楼层
 };
 const CALL_SET_DEFAULT: CallSettings = {
-  useFloors: false, floorCount: 6, maxBubbles: 4, memoryEnabled: true, worldbookEntryKeys: [],
+  useFloors: false, floorCount: 6, maxBubbles: 4, memoryEnabled: true, worldbookEntryKeys: [], autoInterval: 0, lastFloor: 0,
 };
 
 type CallData = { records: CallRecord[]; settings?: Partial<CallSettings> };

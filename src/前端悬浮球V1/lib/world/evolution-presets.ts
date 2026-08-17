@@ -49,41 +49,41 @@ function worldPromptGeneric(focus: string): string {
 const GENERIC_GROUP = '通用世界背景线';
 const GENERIC_PRESETS: WorldPreset[] = [
   { key: 'gen.politics', group: GENERIC_GROUP, name: '天下大势 · 时政格局', dimension: '世界·时政格局', wbBind: [],
-    backdrop: '【极简定调】关注这个世界的上层权力与大局走向，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注这个世界的上层权力与大局走向，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦世界的上层格局与时政脉动：当权者与各方势力的博弈、政令风向与人事更迭、盟约与摩擦、重大决策的余波，以及这些如何自上而下地渗透进普通人的生活。') },
   { key: 'gen.faction', group: GENERIC_GROUP, name: '江湖风云 · 势力动向', dimension: '势力·江湖动向', wbBind: [],
-    backdrop: '【极简定调】关注门派/帮会/组织之间的暗流与角力，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注门派/帮会/组织之间的暗流与角力，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦各方势力（门派/帮会/组织/家族）在幕后的运作：势力范围的消长、结盟与反目、内部派系与人事、资源与地盘之争、正在酝酿的行动与尚未点燃的导火索。') },
   { key: 'gen.economy', group: GENERIC_GROUP, name: '市井烟火 · 经济民生', dimension: '社会·经济民生', wbBind: [],
-    backdrop: '【极简定调】关注市井百姓的生计、物价与日常风气，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注市井百姓的生计、物价与日常风气，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦市井层面的生活脉动：物价与生计、新店新行当、坊间流行与谈资、节庆集市的热闹、寻常人家的悲欢与八卦，让世界有扎实的「烟火气」。') },
   { key: 'gen.war', group: GENERIC_GROUP, name: '烽火前线 · 战局推移', dimension: '冲突·战局推移', wbBind: [],
-    backdrop: '【极简定调】关注战争/冲突的前线与后方，具体设定以绑定世界书为准。仅在世界确有此类冲突时选用。',
+    backdrop: '【极简定调】关注战争/冲突的前线与后方，具体设定以绑定设定为准。仅在世界确有此类冲突时选用。',
     prompt: worldPromptGeneric('聚焦冲突与战局的推移：前线的攻守与胜负、后方的调度与补给、将帅与士卒的处境、战事引发的流民与物资波动、和与战的风向，以及尚未浮现的转机或危机。') },
   { key: 'gen.house', group: GENERIC_GROUP, name: '门第豪族 · 内宅风云', dimension: '家族·内宅风云', wbBind: [],
-    backdrop: '【极简定调】关注世家豪门/大宅内部的人事与暗涌，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注世家豪门/大宅内部的人事与暗涌，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦家族/世家/大宅内部的日常与角力：长幼嫡庶的次序、联姻与继承、仆从与主家的关系、宴席与人情往来、内宅里悄悄滋长的心思与恩怨。') },
   { key: 'gen.academy', group: GENERIC_GROUP, name: '学府庠序 · 校园日常', dimension: '学园·校园日常', wbBind: [],
-    backdrop: '【极简定调】关注学院/学堂/门派授业的师生日常，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注学院/学堂/门派授业的师生日常，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦学府/学堂/学院的日常风云：课业与考核、社团与结社、师生与同窗的关系、临近活动（考试/比试/游学/庆典）的筹备与传闻、少年少女之间的青春插曲。') },
   { key: 'gen.legend', group: GENERIC_GROUP, name: '奇闻异录 · 传说流布', dimension: '秘境·奇闻传说', wbBind: [],
-    backdrop: '【极简定调】关注坊间流传的奇闻、秘境与异象，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注坊间流传的奇闻、秘境与异象，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦世界暗面的奇闻异录：新近流传的传说与谣言、秘境/古迹的异动、离奇事件与未解之谜、探险者与好事者的动向，让世界透出神秘的纵深感与可供探究的钩子。') },
   { key: 'gen.culture', group: GENERIC_GROUP, name: '风尚艺文 · 潮流更替', dimension: '文化·风尚潮流', wbBind: [],
-    backdrop: '【极简定调】关注文艺、时尚与流行风潮的更替，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注文艺、时尚与流行风潮的更替，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦文化与风尚的潮起潮落：新出的作品/曲艺/话本与追捧、时兴的装束与谈吐、名家与新秀的此消彼长、雅集与盛会的热闹，以及一阵风潮如何带动人心与消费。') },
   { key: 'gen.trade', group: GENERIC_GROUP, name: '商路行会 · 货殖往来', dimension: '经济·商路行会', wbBind: [],
-    backdrop: '【极简定调】关注商会/行会与商路上的交易往来，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注商会/行会与商路上的交易往来，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦商路与行会的运转：货物与商队的往来、行会的规矩与竞争、稀缺物资的涨落、商家之间的合纵连横、一桩大买卖或一次断货如何牵动上下游与人心。') },
   { key: 'gen.frontier', group: GENERIC_GROUP, name: '边陲异域 · 他乡风物', dimension: '地理·边陲异域', wbBind: [],
-    backdrop: '【极简定调】关注边陲/异域/他乡的风物与动静，具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】关注边陲/异域/他乡的风物与动静，具体设定以绑定设定为准。',
     prompt: worldPromptGeneric('聚焦边陲与异域的动静：不同地域/族群/文化的风物与习俗、边地的往来与摩擦、远方传来的消息与商旅、异乡人的处境，让世界的地理与文化显得辽阔而有层次。') },
 ];
 export const WORLD_PRESETS: WorldPreset[] = [
   {
     key: 'sxtd.cosmos', group: '世界观·天地灵网', name: '天地灵网 · 社会风向', dimension: '世界·社会风向',
     wbBind: ['世界观', '叙事指南'],
-    backdrop: '【极简定调】现代都市 × 全民娱乐 × 高维秘境；修仙娱乐化、降维用于生活与喜剧；具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】现代都市 × 全民娱乐 × 高维秘境；修仙娱乐化、降维用于生活与喜剧；具体设定以绑定设定为准。',
     prompt: worldPromptOf(
       '聚焦「天地灵网」这张大网上的社会脉动：灵网热搜与流量风向、虚拟主播/选秀/电竞圈的此消彼长、灵石与人民币的物价与消费潮流、'
       + '都市烟火气里的新店新梗、修真界与世俗界的舆论互动。一切超凡都落地为现代日常的便利、娱乐与八卦。'),
@@ -91,7 +91,7 @@ export const WORLD_PRESETS: WorldPreset[] = [
   {
     key: 'sxtd.sect', group: '霜月仙宗·宗门动向', name: '霜月仙宗 · 宗门动向', dimension: '宗门·六宫运作',
     wbBind: ['霜月仙宗设定', '叙事指南'],
-    backdrop: '【极简定调】全女性百合仙宫，修仙娱乐化偶像化，对外是「月宫仙子」、对内是开放热烈的女儿国；六大宫殿与万花镜打榜的具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】全女性百合仙宫，修仙娱乐化偶像化，对外是「月宫仙子」、对内是开放热烈的女儿国；六大宫殿与万花镜打榜的具体设定以绑定设定为准。',
     prompt: worldPromptOf(
       '聚焦霜月仙宫这台精密机器在幕后的运作：各宫殿的项目进度与摩擦（演艺企划、公关舆情、后勤供应、丹药研发、风纪巡查、教务学术——具体以绑定设定为准）、'
       + '万花镜打榜排位的浮动与总选举/对抗赛的暗流、对外偶像运营的新动作与粉丝经济、宫内日常的玩闹风气与八卦论坛热点。'
@@ -100,7 +100,7 @@ export const WORLD_PRESETS: WorldPreset[] = [
   {
     key: 'sxtd.academy', group: '星见丘学院·校园日常', name: '星见丘学园 · 校园日常', dimension: '学园·校园风云',
     wbBind: ['星见丘学院设定', '叙事指南'],
-    backdrop: '【极简定调】把修仙大能降维成普通高中生的现代校园；JK 校服、社团、学园祭等具体设定以绑定世界书为准。',
+    backdrop: '【极简定调】把修仙大能降维成普通高中生的现代校园；JK 校服、社团、学园祭等具体设定以绑定设定为准。',
     prompt: worldPromptOf(
       '聚焦星见丘学园的校园风云：课堂与社团的日常事件、学生会与风纪委的动作、临近校园活动（学园祭/体育祭/修学旅行）的筹备与传闻、'
       + '班级里小团体与暗涌、师生间的青春校园桥段（具体人物/社团/班级以绑定设定为准）。氛围是甜蜜恋爱校园轻小说/动漫的经典事件，'

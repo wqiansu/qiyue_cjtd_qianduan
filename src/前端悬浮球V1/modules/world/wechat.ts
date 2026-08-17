@@ -561,7 +561,7 @@ async function buildWorldbookInject(): Promise<string> {
   const keys = s.worldbookEntryKeys || [];
   if (keys.length) {
     const body = await buildInjectFromKeys(keys);
-    return body ? `【世界书/角色书信息】\n${body}` : '';
+    return body ? `【本作背景设定，供参考界定，勿逐字复述】\n${body}` : '';
   }
   if (!s.worldbookIds.length) return '';
   const chunks: string[] = [];
@@ -572,7 +572,7 @@ async function buildWorldbookInject(): Promise<string> {
       if (body) chunks.push(`【${book}】\n${body}`);
     } catch (e) { void e; }
   }
-  return chunks.length ? `【世界书/角色书信息】\n${chunks.join('\n\n')}` : '';
+  return chunks.length ? `【本作背景设定，供参考界定，勿逐字复述】\n${chunks.join('\n\n')}` : '';
 }
 function wxJailbreak(): string { return (getPromptText('wechat.jailbreak') || '').trim(); }
 function fillVars(tpl: string, vars: Record<string, string | number | undefined>): string {
@@ -1587,7 +1587,7 @@ async function doAiReply(chatId: string): Promise<void> {
     } else {
       const c = getContact(chat.contactIds[0]);
       let persona = fullPersona(c);
-      if (c) { try { const wb = await buildContactWbContext(c.id); if (wb) persona += '\n【绑定世界书设定（参考勿复述）】\n' + wb; } catch (e) { void e; } }
+      if (c) { try { const wb = await buildContactWbContext(c.id); if (wb) persona += '\n【本作绑定设定，供参考界定，勿逐字复述】\n' + wb; } catch (e) { void e; } }
       const bubbles = await sessionReply({
         sessionId: sid, persona, userText: _pendingUserText,
         instruction: fillVars(getPromptText('wechat.single'), { maxBubbles: effSingleBubbles(chat), name: c?.name || '' }) + (extra ? '\n\n' + extra : ''),
@@ -2217,7 +2217,7 @@ function readCharCardText(): string {
         const key = (en.comment || (Array.isArray(en.keys) ? en.keys.join('/') : '') || '').toString();
         return `${key ? `【${key}】` : ''}${String(en.content || '').slice(0, 300)}`;
       }).filter(Boolean).join('\n');
-      if (entries) parts.push('【角色内嵌世界书】\n' + entries);
+      if (entries) parts.push('【角色内嵌设定】\n' + entries);
     }
     return parts.join('\n\n');
   } catch (e) { void e; return ''; }
